@@ -17,46 +17,6 @@ def version_gt(a: str, b: str) -> bool:
     A += [0]*(L-len(A)); B += [0]*(L-len(B))
     return A > B
 
-# ---- 입력 스키마(느슨하게) ----
-# vehicle_manifest 예:
-# {
-#   "vin": "KMH123...",
-#   "ecus": {
-#     "ECU.ENGINE": {
-#        "hw_id": "IPG-1234",
-#        "installed": {"name":"engine.bin","version":"1.2.0","sha256":"..."}
-#     },
-#     "ECU.BCM": {
-#        "hw_id": "BCM-9X",
-#        "installed": {"name":"bcm.bin","version":"0.9.1","sha256":"..."}
-#     }
-#   }
-# }
-#
-# global_targets 예(Uptane Targets 형태 가정):
-# {
-#   "signed": {
-#     "targets": {
-#       "engine.bin": {
-#         "hashes": {"sha256":"..."},
-#         "length": 123456,
-#         "custom": {
-#            "version": "1.3.0",
-#            "ecuIds": ["ECU.ENGINE"],              # 선택: 특정 ECU만
-#            "hardwareIds": ["IPG-1234","IPG-1235"],# 선택: HW 매칭
-#            "deviceIds": ["KMH123..."],            # 선택: 특정 VIN 타깃팅
-#            "component": "ENGINE"                  # 선택: 태깅용
-#         }
-#       },
-#       "bcm.bin": {
-#         "hashes": {"sha256":"..."},
-#         "length": 98765,
-#         "custom": {"version":"1.0.0","hardwareIds":["BCM-9X"]}
-#       }
-#     }
-#   }
-# }
-
 @dataclass
 class EcuState:
     ecu_id: str
