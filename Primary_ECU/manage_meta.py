@@ -57,7 +57,7 @@ def generate_root(root_threshold, targets_threshold):
     
     # Make Raw data
     signed_content = {
-        "_type": "Root",
+        "_type": "root",
         "spec_version": "1.0.0",
         "version": 1,
         "expires": expires_date,
@@ -98,7 +98,7 @@ def generate_root(root_threshold, targets_threshold):
 
 
 # Verify metadata(multi-signature verification)
-def verify_multi_signature(metadata, keyTable, n, output_dir="keys_out"):
+def read_root(metadata, output_dir="keys_out"):
     with open(metadata, "r", encoding="utf-8") as f:
         rawData = json.load(f)
 
@@ -116,23 +116,45 @@ def verify_multi_signature(metadata, keyTable, n, output_dir="keys_out"):
         key_map[keyid] = pem_path
     #key_map = {keyid: keyinfo["keyval"]["public"] for keyid, keyinfo in keys_dict.items()}
 
+    key_for_meta = {}
+    roles = rawData["signed"]["roles"]
+
+    for role_name, role_info in roles.items():
+        key_for_meta[role_name] = {
+            "threshold": role_info["threshold"],
+            "keyids": role_info["keyids"]
+        }
+
+    return key_for_meta
+
+def verify_multi_signature(metadata, key_info, output_dir="keys_out"):
+    with open(metadata, "r", encoding="utf-8") as f:
+        rawData = json.load(f)
+
     verify_content = json.dumps(rawData["signed"], separators=(',', ':'), sort_keys=True).encode("utf-8")  
+    threshold = key_info[rawData["signed"]["_type"]]["threshold"]
     verifyCnt = 0
     
-    for i in range(len(rawData["signatures"])):
-        vk_hash = rawData["signatures"][i]["keyid"]
-        signature = rawData["signatures"][i]["sig"]
+    for sig_info in rawData["signatures"]:
+        vk_hash = sig_info["keyid"]
+        signature = sig_info["sig"]
 
-        if not verifySignature(key_map[vk_hash], signature, verify_content):
-            print(f"Fail to verify: {vk_hash}")
+        pem_path = os.path.join(output_dir, f"{vk_hash}.pem")
+
+        if not os.path.exists(pem_path):
+            print(f"Key file not found: {pem_path}")
+            continue
+
+        if not verifySignature(pem_path, signature, verify_content):
+            print(f"Fail to verify : {vk_hash}")
         else:
             print(f"Success Verification: {vk_hash}")
             verifyCnt += 1
-            
-            if verifyCnt == n:
+
+            if verifyCnt == threshold:
                 break
 
-    if verifyCnt >= n:
+    if verifyCnt >= threshold:
         print("Success the Multi-Signature Verification")
     else:
         print("Fail the Multi-Signature Verification")
@@ -141,4 +163,6 @@ def verify_multi_signature(metadata, keyTable, n, output_dir="keys_out"):
 
 if __name__ == '__main__':
     generate_root(2,2)
-    verify_multi_signature("./root.json", {}, 1)
+    key_info = read_root("./root.json")
+    print(key_info)
+    verify_multi_signature("./root.json", key_info)
