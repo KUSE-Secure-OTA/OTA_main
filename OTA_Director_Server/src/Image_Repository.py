@@ -182,6 +182,7 @@ class FileChangeHandler(FileSystemEventHandler):
             with open(TARGET_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
             
+            targets = {}
             for folder_name, files in data.items():
                 if folder_name == "version":
                     continue
@@ -200,22 +201,43 @@ class FileChangeHandler(FileSystemEventHandler):
                             content = f.read()
                         file_hash = hashlib.sha256(content).digest()
                         file_info["sha256"] = base64.b64encode(file_hash).decode('utf-8')
+
                         sk = SigningKey.from_pem(open("./utils/signature/image_private.pem").read())
                         signature = sk.sign(file_hash)
                         file_info["signature"] = base64.b64encode(signature).decode('utf-8')
+
                         print(f"[Watcher] Signature created: {file_name}")
-                    
+
+                        targets[file_name] = {
+                            "hashes": {
+                                "sha256": hashlib.sha256(content).hexdigest(),
+                            },
+                            "length": len(content)
+                        }
+
                     except Exception as e:
-                        print(f"[Error] Failed to sign {file_name}: {e}")
+                        print(f"[Error] Failed to process {file_name}: {e}")
+
             try:
+                output = {
+                    "signed": {
+                        "_type": "targets",
+                        "spec_version": "1.0.0",
+                        "version": 1,
+                        "expires": "2030-01-01T00:00:00Z",
+                        "targets": targets
+                    },
+                    "signatures": []
+                }
+
                 with open("./data/target_image.json", "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=4, ensure_ascii=False)
-                print("[Watcher] Success: Signed all files\n")
-                
+                    json.dump(output, f, indent=4, ensure_ascii=False)
+                print("[Watcher] Success: target_image.json created in Director format\n")
+
                 output_tar_path = "./data/update_image.tar.xz"
                 self.json_handler.create_new_update_tarball("./data/target_image.json", self.watch_dir, output_tar_path)
                 print(f"[Watcher] Tarball created: {output_tar_path}\n")
-            
+
             except Exception as e:
                 print(f"[Error] Tarball creation failed: {e}\n")
 
