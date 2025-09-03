@@ -9,6 +9,8 @@ import json, os, sys, hashlib, binascii
 from typing import Dict, Any, List, Tuple, Optional
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 SPEC_VERSION = "1.0.0"
 
@@ -19,6 +21,8 @@ DEFAULT_VERSION  = 1
 DEFAULT_EXPIRES  = "2030-01-01T00:00:00Z"
 DEFAULT_DELEG    = None
 DEFAULT_PRIVKEY  = "targets.pem"
+DEFAULT_TARGETS_PUB= "targets_pub.pem"
+DEFAULT_ROOTPATH = "1.root.json"  # keyid 참조할 root
 
 def canonical_json_bytes(obj: Any) -> bytes:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
@@ -46,15 +50,43 @@ def load_private_key_or_exit(priv_path: str) -> Ed25519PrivateKey:
         print(f"[!] Failed to load private key: {e}", file=sys.stderr)
         sys.exit(2)
 
-def keyid_from_private(sk: Ed25519PrivateKey) -> str:
-    pub = sk.public_key().public_bytes(
-        serialization.Encoding.Raw, serialization.PublicFormat.Raw
-    )
-    return hashlib.sha256(pub).hexdigest()
-
 def ed25519_sign_hex(sk: Ed25519PrivateKey, data: bytes) -> str:
     sig = sk.sign(data)
     return binascii.hexlify(sig).decode("ascii")
+
+def ed25519_pem_to_raw_hex_from_file(pub_pem_path: str) -> str:
+    if not os.path.exists(pub_pem_path):
+        print(f"[!] targets_pub.pem not found: {pub_pem_path}", file=sys.stderr)
+        sys.exit(2)
+    with open(pub_pem_path, "r", encoding="utf-8") as f:
+        pem = f.read().strip()
+    pub = serialization.load_pem_public_key(pem.encode("utf-8"), backend=default_backend())
+    raw = pub.public_bytes(Encoding.Raw, PublicFormat.Raw)  # 32 bytes
+    return raw.hex()
+
+def resolve_targets_keyid_from_root_by_pubhex(root_path: str, my_pub_hex: str) -> str:
+    """
+    root.json의 roles.targets.keyids 목록 순회.
+    각 keyid에 대해 signed.keys[keyid].keyval.public 과 my_pub_hex를 비교.
+    일치하는 keyid를 반환. 없으면 에러.
+    """
+    if not os.path.exists(root_path):
+        print(f"[!] root.json not found: {root_path}", file=sys.stderr)
+        sys.exit(2)
+    with open(root_path, "r", encoding="utf-8") as f:
+        root_doc = json.load(f)
+
+    signed = root_doc["signed"]
+    keys = signed["keys"]                       # {keyid: keyobj}
+    role_kids = signed["roles"]["targets"]["keyids"]  # [keyid, ...]
+
+    for kid in role_kids:
+        keyobj = keys[kid]
+        if keyobj.get("keytype") == "ed25519" and keyobj.get("keyval", {}).get("public") == my_pub_hex:
+            return kid
+
+    print("[!] root.json의 'targets' role에 공개키가 등록되어 있지 않습니다.", file=sys.stderr)
+    sys.exit(3)
 
 def build_targets_obj(inputs: List[str], version: int, expires: str, delegations: Optional[Dict[str,Any]]) -> Dict[str,Any]:
     targets: Dict[str, Any] = {}
@@ -84,27 +116,19 @@ def make_targets(
     delegations: Optional[Dict[str, Any]] = DEFAULT_DELEG,
     privkey_path: str = DEFAULT_PRIVKEY,
 ) -> Dict[str, Any]:
-    """
-    Build & sign targets metadata.
 
-    - inputs: ["local_path[:target_name]", ...]
-    - out_path: 결과 JSON 경로 (예: "./metadata/targets.json")
-    - version: 정수 버전
-    - expires: ISO8601 UTC ("YYYY-MM-DDTHH:MM:SSZ")
-    - delegations: 선택
-    - privkey_path: Ed25519 개인키(PEM) 경로
-    """
     # 출력 디렉터리 보장
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
 
-    # 키 로드 및 keyid 산출
-    sk = load_private_key_or_exit(privkey_path)
-    keyid = keyid_from_private(sk)
+    # root로부터 keyid 획득
+    my_pub_hex = ed25519_pem_to_raw_hex_from_file(targets_pub_pem)
+    keyid = resolve_targets_keyid_from_root_by_pubhex(root_path, my_pub_hex)
 
     # signed 객체 구성
     signed_obj = build_targets_obj(inputs, int(version), expires, delegations)
 
     # 서명
+    sk = load_private_key_or_exit(privkey_path)
     payload = canonical_json_bytes(signed_obj)
     sig_hex = ed25519_sign_hex(sk, payload)
 
