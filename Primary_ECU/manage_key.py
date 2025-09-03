@@ -13,6 +13,16 @@ def makeKeys(n):
         with open(f"verifyKey_{i}.pem", "wb") as f:
             f.write(vk.to_pem())
 
+def makeECUKeys(ecu_name):
+    sk = SigningKey.generate(curve=NIST384p)
+    vk = sk.get_verifying_key()
+
+    with open(f"signKey_{ecu_name}.pem", "wb") as f:
+        f.write(sk.to_pem())
+
+    with open(f"verifyKey_{ecu_name}.pem", "wb") as f:
+        f.write(vk.to_pem())
+
 
 def makeSignature(keyPath, data):
     try:

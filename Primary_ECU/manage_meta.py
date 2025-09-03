@@ -3,7 +3,7 @@ import json
 import hashlib
 import random
 from datetime import datetime, timedelta
-from manage_key import makeKeys, makeSignature, verifySignature
+from manage_key import makeKeys, makeECUKeys, makeSignature, verifySignature
 
 # Read keys
 def loadKeys(keyType, directory='.'):
@@ -34,7 +34,7 @@ def generate_root(root_threshold, targets_threshold):
     # Expires date
     expires_date = (datetime.utcnow() + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Define Rolse
+    # Define Roles
     keys = loadKeys("verify")
     keyIds = list(keys.keys())
 
@@ -92,12 +92,94 @@ def generate_root(root_threshold, targets_threshold):
 
     print("\n", '='*50, "\nGenerate Root metadata\n", '='*50)
 
-# Renew signatures
+# Make ECU Version Report
+def generate_version_report():
+    rawData = {
+        "ecu_serial": "brake_ecu_002",
+        "timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "installed_image": {
+            "filepath": "brake_ecu_v1.5.bin",
+            "fileinfo": {
+                "length": 52488,
+                "hashes": "b5d4045c3f466fa..."
+            }
+        }
+    }
 
-# Make Target metadata
+    signatures = []
+    signed_bytes = json.dumps(rawData, separators=(',', ':'), sort_keys=True).encode("utf-8")
 
+    makeECUKeys(rawData["ecu_serial"])
+    signed_content = makeSignature(f"signKey_{rawData['ecu_serial']}.pem", signed_bytes)
 
-# Verify metadata(multi-signature verification)
+    with open(f"signKey_{rawData['ecu_serial']}.pem", "rb") as f:
+        pem_content = f.read()
+
+    keyId = hashlib.sha256(pem_content).hexdigest()
+    signatures.append({
+        "keyid": keyId,
+        "sig": signed_content.decode("utf-8")
+    })
+
+    os.makedirs("version_report", exist_ok=True)
+
+    report_structure = {
+        "signature": signatures,
+        "signed": rawData
+    }
+
+    with open(f"version_report/{rawData['ecu_serial']}.json", "w", encoding="utf-8") as f:
+        json.dump(report_structure, f, indent=2)
+
+    print("\n", '='*50, "\nGenerate Version Report\n", '='*50)
+
+# Make Vehicle Version Manifest
+def generate_vvm():
+    # Basic Info
+    vin = "1HGBH41JXMN109186"
+    expires_date = (datetime.utcnow() + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    
+    # Collect Reports
+    reports = []
+    for report in os.listdir("./version_report"):
+        if report.lower().endswith(".json"):
+            with open(os.path.join("version_report", report), "r", encoding="utf-8") as f:
+                reportData = json.load(f)
+            reports.append(reportData)
+
+    rawData = {
+        "vin": vin,
+        "primary_ecu_serial": "primary0",
+        "ecu_version_report": reports
+    }
+
+    # Make Signatures
+    signatures = []
+    signed_bytes = json.dumps(rawData, separators=(',', ':'), sort_keys=True).encode("utf-8")
+
+    makeECUKeys(rawData["primary_ecu_serial"])
+    signed_content = makeSignature(f"signKey_{rawData['primary_ecu_serial']}.pem", signed_bytes)
+
+    with open(f"signKey_{rawData['primary_ecu_serial']}.pem", "rb") as f:
+        pem_content = f.read()
+
+    keyId = hashlib.sha256(pem_content).hexdigest()
+    signatures.append({
+        "keyid": keyId,
+        "sig": signed_content.decode("utf-8")
+    })
+
+    vvm_structure = {
+        "signature": signatures,
+        "signed": rawData
+    }
+
+    with open("vehicle_version_manifest.json", "w", encoding="utf-8") as f:
+        json.dump(vvm_structure, f, indent=2)
+
+    print("\n", '='*50, "\nGenerate Vehicle Version Manifest\n", '='*50)
+
+# Get key informations
 def read_root(metadata, output_dir="keys_out"):
     with open(metadata, "r", encoding="utf-8") as f:
         rawData = json.load(f)
@@ -114,7 +196,6 @@ def read_root(metadata, output_dir="keys_out"):
             pem_file.write(public_pem)
 
         key_map[keyid] = pem_path
-    #key_map = {keyid: keyinfo["keyval"]["public"] for keyid, keyinfo in keys_dict.items()}
 
     key_for_meta = {}
     roles = rawData["signed"]["roles"]
@@ -127,6 +208,7 @@ def read_root(metadata, output_dir="keys_out"):
 
     return key_for_meta
 
+# Verify metadata(multi-signature verification)
 def verify_multi_signature(metadata, key_info, output_dir="keys_out"):
     with open(metadata, "r", encoding="utf-8") as f:
         rawData = json.load(f)
@@ -159,10 +241,11 @@ def verify_multi_signature(metadata, key_info, output_dir="keys_out"):
     else:
         print("Fail the Multi-Signature Verification")
 
-
-
 if __name__ == '__main__':
-    generate_root(2,2)
+    generate_root(2, 2)
     key_info = read_root("./root.json")
     print(key_info)
     verify_multi_signature("./root.json", key_info)
+
+    generate_version_report()
+    generate_vvm()
