@@ -115,6 +115,8 @@ def make_targets(
     expires: str = DEFAULT_EXPIRES,
     delegations: Optional[Dict[str, Any]] = DEFAULT_DELEG,
     privkey_path: str = DEFAULT_PRIVKEY,
+    root_path: str = DEFAULT_ROOT_JSON,
+    targets_pub_pem: str = DEFAULT_TARGETS_PUB,
 ) -> Dict[str, Any]:
 
     # 출력 디렉터리 보장
