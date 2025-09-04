@@ -1,0 +1,13 @@
+{
+    "version": "v0.0.1",
+    "TestABC": {
+        "aston_front.jpg": {
+            "path": "images/aston_front.jpg",
+            "version": 1
+        },
+        "aston_back.jpg": {
+            "path": "images/aston_back.jpg",
+            "version": 1
+        }
+    }
+}
