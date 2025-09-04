@@ -15,7 +15,7 @@ from ecdsa import SigningKey
 
 from utils.json_handler import JsonHandler
 from utils.signature.pub_signature import make_payload_with_signature
-from utils.signature.sub_signature import verify_signature
+from utils.signature.sub_signature import verify_multi_signature
 
 # IP/호스트 지정 : Flask 서버 (Line 23), MQTT 브로커 (Line 237)
 
@@ -127,42 +127,59 @@ class FileHandler:
             print(f"[Error] Failed to retrieve TLS Session ID: {e}")
 
     def on_message(self, client, userdata, msg):
-        if verify_signature(msg.payload):
+        try:
             payload_data = json.loads(msg.payload.decode('utf-8'))
-            
-            if msg.topic == self.MQTT_REQUEST_TOPIC:
-                print("[MQTT] Meta Data request received from Primary ECU\n")
-                
-                if not os.path.exists("./data/target_image.json"):
-                    print("[Error] target_image.json not found")
-                    return
-                
-                with open("./data/target_image.json", "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                upload_url = f"https://{self.MQTT_BROKER}:8443/upload"
-                
-                try:
-                    with open(self.files_path, 'rb') as f:
-                        files = {'file': ('update_image.tar.xz', f)}
-                        res = requests.post(upload_url, files=files, verify="./utils/certs/https_server.crt")
+            temp_json_path = "./receive_signature.json"
+            with open(temp_json_path, "w", encoding="utf-8") as f:
+                json.dump(payload_data, f, indent=2)
+
+            # 저장한 JSON 파일의 다중 서명 검증 수행
+            if verify_multi_signature(temp_json_path):
+                print("[MQTT] ✅ Multi-signature verification passed")
+
+                if msg.topic == self.MQTT_REQUEST_TOPIC:
+                    print("[MQTT] Meta Data request received from Primary ECU\n")
                     
-                    if res.status_code != 200:
-                        print(f"[Error] File upload failed (HTTP {res.status_code})")
+                    # 전송할 대상 이미지 메타 데이터 파일 경로 지정
+                    target_path = "./data/target_image.json"
+                    if not os.path.exists(target_path):
+                        print("[Error] target_image.json not found")
                         return
-                    download_url = res.json().get('url')
                     
-                    if not download_url:
-                        print("[Error] No URL in server response")
-                        return
-                    print(f"[MQTT] 📡 Upload complete, download URL: {download_url}\n")
-                    data["url"] = download_url
-                    meta_payload = make_payload_with_signature(data)
-                    client.publish(self.MQTT_META_TOPIC, meta_payload, qos=2)
-                
-                except Exception as e:
-                    print(f"[Error] Exception occurred during upload: {e}")
-        else:
-            print("[Error] Signature verification failed \n")
+                    # target_image.json 파일 읽기
+                    with open(target_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+
+                    upload_url = f"https://{self.MQTT_BROKER}:8443/upload"
+
+                    try:    # 서버
+                        with open(self.files_path, 'rb') as f:
+                            files = {'file': ('update_image.tar.xz', f)}
+                            res = requests.post(upload_url, files=files, verify="./utils/certs/https_server.crt")
+                        
+                        if res.status_code != 200:
+                            print(f"[Error] File upload failed (HTTP {res.status_code})")
+                            return
+
+                        download_url = res.json().get('url')
+                        if not download_url:
+                            print("[Error] No URL in server response")
+                            return
+
+                        print(f"[MQTT] 📡 Upload complete, download URL: {download_url}\n")
+                        data["url"] = download_url
+
+                        meta_payload = make_payload_with_signature(data)
+                        client.publish(self.MQTT_META_TOPIC, meta_payload, qos=2)
+
+                    except Exception as e:
+                        print(f"[Error] Exception occurred during upload: {e}")
+
+            else:
+                print("[MQTT] ❌ Multi-signature verification failed")
+
+        except Exception as e:
+            print(f"[Error] Exception in on_message: {e}")
 
 
 class FileChangeHandler(FileSystemEventHandler):
