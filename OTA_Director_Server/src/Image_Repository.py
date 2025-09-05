@@ -14,7 +14,7 @@ import paho.mqtt.client as mqtt
 from ecdsa import SigningKey
 
 from utils.json_handler import JsonHandler
-from utils.signature.pub_signature import make_payload_with_signature
+from src.utils.signature.pub_signature import make_payload_with_signatures
 from utils.signature.sub_signature import verify_multi_signature
 
 # IP/호스트 지정 : Flask 서버 (Line 23), MQTT 브로커 (Line 237)
@@ -169,7 +169,7 @@ class FileHandler:
                         print(f"[MQTT] 📡 Upload complete, download URL: {download_url}\n")
                         data["url"] = download_url
 
-                        meta_payload = make_payload_with_signature(data)
+                        meta_payload = make_payload_with_signatures(data)
                         client.publish(self.MQTT_META_TOPIC, meta_payload, qos=2)
 
                     except Exception as e:
