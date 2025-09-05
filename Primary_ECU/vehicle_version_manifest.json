@@ -1,0 +1,33 @@
+{
+  "signature": [
+    {
+      "keyid": "842e27856573f12283a64fd3ed2908d5e0901f1f0b445af29d8403517a5c7f2f",
+      "sig": "bUV3ClXMgJFFU60u/KddUE2Elwq+FXLwHzpauF6Xtqh0IdG3bdyeqPOJ6AHXDv+3VBLawFN5cVvqFzihNbFIE4qQHQh7X3x3xBY7jqoEvTJACS+6Yk6UJgow3mXCj/ks"
+    }
+  ],
+  "signed": {
+    "vin": "1HGBH41JXMN109186",
+    "primary_ecu_serial": "primary0",
+    "ecu_version_report": [
+      {
+        "signature": [
+          {
+            "keyid": "1fcfe285c164c397976fea91373387ed293216d32a69e736f016554351f425ce",
+            "sig": "Oe7wSyD7H0G4L20NioqGhtC1O5ARbn7rNHNz5dQXcWIX3uiv9Oal47L+ZOcFfAdac4tbqvKgKSK07ByvVEW82jcAUwOqEKL0Jr5uYGRuDJlAoJ7g1NeM3T0JxhpKiAbR"
+          }
+        ],
+        "signed": {
+          "ecu_serial": "brake_ecu_002",
+          "timestamp": "2025-09-03T04:25:32Z",
+          "installed_image": {
+            "filepath": "brake_ecu_v1.5.bin",
+            "fileinfo": {
+              "length": 52488,
+              "hashes": "b5d4045c3f466fa..."
+            }
+          }
+        }
+      }
+    ]
+  }
+}

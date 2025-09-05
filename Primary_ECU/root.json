@@ -1,0 +1,57 @@
+{
+  "signatures": [
+    {
+      "keyid": "7413dac643c270eba804de1db580f074d21f1f22d6db3a3e2528306efbc0b693",
+      "sig": "rcAfVuykxCqE8Y7s1ZsbFg5FO7S7IgxF8newqXph3upu2Q/2GmBmAx6LA7zsSvynq3Q/rvR4ImvBAgTn/eGQhy5sMe9XHNXCJ/PK4rUQhdnLT/8Gjlocru5je3E1MUkL"
+    },
+    {
+      "keyid": "fe093cfb3850c8debb37492efb3f46198ac95c6604ad1643baf699a8f54c1088",
+      "sig": "Mt/YfR38VvhzacF1Us6tkH8RZcer94NzRo5cXBP7P2cXcpU2eA3235GI6nPiwrHAfrjBDMcLbFflnQlv/GMVaDCdRl+YnC2iED7Ljmd7dMRoVw/DTdqw+kPWjrSqjJhj"
+    }
+  ],
+  "signed": {
+    "_type": "Root",
+    "spec_version": "1.0.0",
+    "version": 1,
+    "expires": "2025-09-22T08:15:04Z",
+    "keys": {
+      "fe093cfb3850c8debb37492efb3f46198ac95c6604ad1643baf699a8f54c1088": {
+        "keytype": "ecdsa-NIST384p",
+        "scheme": "ecdsa-NIST384p",
+        "keyval": {
+          "public": "-----BEGIN PUBLIC KEY-----\nMHYwEAYHKoZIzj0CAQYFK4EEACIDYgAE9+xiLQMi+zc734iKbwSTRDeyLTQcy6STPjSvXhmj5NUq\nsGmeBAmvyGBIUlZ280zc6XUNBpfIlsrvDSLuyGvSek3UgHOtdW1nDvtPBdAGUKsKhJlwltzVCxYv\nHhmHtyb5\n-----END PUBLIC KEY-----"
+        }
+      },
+      "7413dac643c270eba804de1db580f074d21f1f22d6db3a3e2528306efbc0b693": {
+        "keytype": "ecdsa-NIST384p",
+        "scheme": "ecdsa-NIST384p",
+        "keyval": {
+          "public": "-----BEGIN PUBLIC KEY-----\nMHYwEAYHKoZIzj0CAQYFK4EEACIDYgAECaWP0KHOa79X+BluylhvrWMwguYE+47+ifz/PeN17j8U\nWUUesgdWfK78CvQgjOPNuExKQ6BAkpaY7amDNSPPGLE+5RG24xeF36b/6ijp31FK44rFxK7PJF4m\nBHbjTXMQ\n-----END PUBLIC KEY-----"
+        }
+      },
+      "97a9c7be2537520c5533a61e47bbce11b397cba71ebe275d6b75cda696b53ed0": {
+        "keytype": "ecdsa-NIST384p",
+        "scheme": "ecdsa-NIST384p",
+        "keyval": {
+          "public": "-----BEGIN PUBLIC KEY-----\nMHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEpQZLGafujCuhoNuxZ1VCs7fBegW7mTEWVbGtykVYXzNh\ndmMAwUaF3JJN3z6MktIa69RKSwfzAZ39ZBf7tzmwSU/w6N5iQbPCASEe4F2RIuIdfa7Fv9H7wYAR\nrtLlR8Wj\n-----END PUBLIC KEY-----"
+        }
+      }
+    },
+    "roles": {
+      "root": {
+        "keyids": [
+          "7413dac643c270eba804de1db580f074d21f1f22d6db3a3e2528306efbc0b693",
+          "fe093cfb3850c8debb37492efb3f46198ac95c6604ad1643baf699a8f54c1088"
+        ],
+        "threshold": 2
+      },
+      "targets": {
+        "keyids": [
+          "7413dac643c270eba804de1db580f074d21f1f22d6db3a3e2528306efbc0b693",
+          "fe093cfb3850c8debb37492efb3f46198ac95c6604ad1643baf699a8f54c1088"
+        ],
+        "threshold": 2
+      }
+    }
+  }
+}
