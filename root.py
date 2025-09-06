@@ -191,23 +191,26 @@ def main():
     # === 최종 문서 (출력 순서 유지) ===
     root_doc = {"signatures": signatures, "signed": root_signed}
 
-    outpath1 = f"./Director/{VERSION}.root.json"
-    outpath2 = f"./Image/{VERSION}.root.json"
+    dir_ver_path = f"./Director/meta/{VERSION}.root.json"
+    dir_cur_path = "./Director/root.json"
+    img_ver_path = f"./Image/meta/{VERSION}.root.json"
+    img_cur_path = "./Image/root.json"
 
-    with open(outpath1, "w", encoding="utf-8") as f:
-        json.dump(root_doc, f, indent=1, ensure_ascii=False, sort_keys=False)
+    with open(dir_ver_path, "w", encoding="utf-8") as f:
+        json.dump(root_doc, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    with open(dir_cur_path, "w", encoding="utf-8") as f:
+        json.dump(root_doc, f, indent=2, ensure_ascii=False)
         f.write("\n")
 
-    with open(outpath2, "w", encoding="utf-8") as f:
-        json.dump(root_doc, f, indent=1, ensure_ascii=False, sort_keys=False)
+    with open(img_ver_path, "w", encoding="utf-8") as f:
+        json.dump(root_doc, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    with open(img_cur_path_path, "w", encoding="utf-8") as f:
+        json.dump(root_doc, f, indent=2, ensure_ascii=False)
         f.write("\n")
 
-    print(f"[ok] wrote {outpath1}")
-    print(f"[ok] wrote {outpath2}")
-    # print(f"[info] root keyids (3): {root_keyids}")
-    # print(f"[info] snapshot/targets/timestamp keyids:", snapshot_kid, targets_kid, timestamp_kid)
-    # print(f"[info] signatures: {len(signatures)} added (threshold=2)")
-    # print(f"[info] expires (UTC):", EXPIRES)
-
+    print(f"[ok] wrote root for Director")
+    print(f"[ok] wrote root for Image")
 if __name__ == "__main__":
     main()

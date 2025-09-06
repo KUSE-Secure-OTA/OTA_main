@@ -2,17 +2,16 @@
 ## Branch for Director Repository
 
 ### Director
-- Director Repository 구현 디렉터리
+- Director Repository
 ### Image
-- Image Repositoy용 디렉터리
-- root 메타데이터만 저장돼있음
-### Upload
-- Watchdog 구현 디렉터리
+- Image Repositoy
+- 임시
+## Upload
+- Watchdog 구현
 - 해당 디렉터리에 업데이트 파일 업로드
 ### 상위 디렉터리(Local)
 - root 메타데이터 생성
 
 ## 수정 필요
-1. timestamp, snapshot 추가
-2. 키 저장 위치 조정
-3. 차량 Manifest 형식 확정 및 관련 코드 수정
+1. 코드 상에서 metadata 저장 위치, key 이름 및 참조 위치 변경 필요
+2. root 생성 시 Director, Image 다른 키 쓰도록 바꿔야 함

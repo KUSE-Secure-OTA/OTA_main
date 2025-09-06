@@ -4,10 +4,13 @@ import json
 import ssl
 import paho.mqtt.client as mqtt
 import base64
+from typing import Dict, Any
 from ecdsa import VerifyingKey, BadSignatureError
 from ecdsa import ed25519  # Ed25519 사용
 
-from version_compare import select_updates_for_vehicle
+from targets_per_vehicle import make_targets_for_car
+from snapshot import generate_snapshot
+from timestamp import generate_timestamp
 
 # (임시) 공개키 매핑
 PRIMARY_KEY_MAP = {
@@ -50,6 +53,32 @@ def verify_vvm_signature(vvm: Dict[str, Any]) -> bool:
             print(f"[ERR] VVM signature verify error: {e}")
 
     return False
+
+def save_meta(
+    doc: Dict[str, Any],
+    role: str,
+) -> int:
+    os.makedirs("./meta", exist_ok=True)
+
+    version = doc["signed"].get("version")
+    if not isinstance(version, int):
+        raise ValueError("doc.signed.version이 int 아님")
+
+    # 경로
+    ver_path = os.path.join("./meta", f"{version}.{role}.json")
+    cur_path = os.path.join("./", f"{role}.json")
+
+    # 1) 버전 파일 저장
+    with open(ver_path, "w", encoding="utf-8") as f:
+        json.dump(doc, f, ensure_ascii=False, indent=2)
+
+    # 2) 전송용 파일 저장(원자적 교체)
+    tmp = cur_path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(doc, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, cur_path)
+
+    return version
 
 class DirectorRepoHandler:
     def __init__(self, broker, port):
@@ -109,34 +138,49 @@ class DirectorRepoHandler:
             print(f"[ERR] failed to load global targets: {e}")
             return
 
-        # 3) per-vehicle targets 생성
+        # 3) per-vehicle targets, snapshot doc 생성
+        per_vehicle_doc = make_targets_for_car(vehicle_manifest, global_targets)
+        snapshot_doc = generate_snapshot()
+
+        # 결과 저장
+        ver_targets = save_meta(per_vehicle_doc, "targets")
+        ver_snapshot = save_meta(snapsnapshot_doc, "snapshot")
+
+        # timestamp 생성
+        generate_timestamp()
+
+        # 4) publish(root->timestamp->snapshot->targets)
         try:
-            sel = select_updates_for_vehicle(vehicle_manifest, global_targets)
-            per_vehicle_doc = sel["targets_doc"]
-            debug_info = sel.get("debug", {})
-
-            # 결과 저장
-            os.makedirs("./out", exist_ok=True)
-            with open("./out/per_vehicle.targets.json", "w", encoding="utf-8") as f:
-                json.dump(per_vehicle_doc, f, ensure_ascii=False, indent=2)
-
-            print(f"[OK] built per-vehicle targets → ./out/per_vehicle.targets.json")
-            if debug_info:
-                print(f"  - selected_count={debug_info.get('selected_count')}, reasons={debug_info.get('reasons')}")
+            with open("./root.json", "r", encoding="utf-8") as f:
+                payload = f.read()
+            client.publish(self.update_meta_topic, payload, qos=1)
+            print("\nPublish root metadata\n")
         except Exception as e:
-            print(f"[ERR] failed to build per-vehicle targets: {e}")
-            return
+            print(f"[ERR] failed to publish timestamp: {e}")
 
-        # 4) publish
         try:
-            client.publish(
-                self.update_meta_topic,
-                json.dumps(per_vehicle_doc, ensure_ascii=False),
-                qos=1
-            )
-            print("\nPublish per-vehicle targets metadata\n")
+            with open("./timestamp.json", "r", encoding="utf-8") as f:
+                payload = f.read()
+            client.publish(self.update_meta_topic, payload, qos=1)
+            print("\nPublish timestamp metadata\n")
         except Exception as e:
-            print(f"[ERR] failed to publish: {e}")
+            print(f"[ERR] failed to publish timestamp: {e}")
+        
+        try:
+            with open("./snapshot.json", "r", encoding="utf-8") as f:
+                payload = f.read()
+            client.publish(self.update_meta_topic, payload, qos=1)
+            print(f"\nPublish snapshot metadata (ver={ver_snapshot})\n")
+        except Exception as e:
+            print(f"[ERR] failed to publish snapshot: {e}")
+
+        try:
+            with open("./targets.json", "r", encoding="utf-8") as f:
+                payload = f.read()
+            client.publish(self.update_meta_topic, payload, qos=1)
+            print(f"\nPublish per-vehicle targets metadata (ver={ver_targets})\n")
+        except Exception as e:
+            print(f"[ERR] failed to publish targets: {e}")
 
 
 def configure_tls(client, ca_cert, client_cert, client_key):

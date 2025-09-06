@@ -16,7 +16,7 @@ SPEC_VERSION = "1.0.0"
 
 # ===== 사용자 정의 기본값 =====
 DEFAULT_INPUTS   = ["temp.bin"]   # 입력 파일 (local_path[:target_name])
-DEFAULT_OUT      = "./metadata/targets.json"                     # 출력 JSON 파일
+DEFAULT_OUT      = "./meta/targets.json"                     # 출력 JSON 파일
 DEFAULT_VERSION  = 1
 DEFAULT_EXPIRES  = "2030-01-01T00:00:00Z"
 DEFAULT_DELEG    = None

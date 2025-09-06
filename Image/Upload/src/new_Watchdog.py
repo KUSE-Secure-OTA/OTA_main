@@ -13,7 +13,7 @@ from targets import make_targets
 WATCH_DIR    = "."                 # 감시할 위치
 PRIVATE_KEY  = "./targets.pem"     # 서명용 개인키
 EXPIRES_DAYS = 30                  # 만료: 현재 UTC + 30일
-OUTPUT_DIR   = "./metadata"        # 결과 저장 위치
+OUTPUT_DIR   = "./meta"            # 결과 저장 위치
 IGNORE_SUFFIXES = {".part", ".tmp", ".swp", ".crdownload"}
 
 # 만료 시간 계산
@@ -77,9 +77,6 @@ class TargetFileHandler(FileSystemEventHandler):
 
         out_path = os.path.join(OUTPUT_DIR, f"{version}.targets.json")
         os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-        print(f"[build] version={version}, expires={expires_iso}")
-        print(f"[build] inputs={inputs}")
 
         make_targets(
             inputs=inputs,

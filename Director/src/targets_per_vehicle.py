@@ -5,8 +5,8 @@ from typing import Dict, Any, List, Optional, Tuple
 # ====== 설정(임시) ==========================================
 DIRECTOR_SIGN_KEY_PATH = "./keys/director_targets_priv.pem"   # Ed25519 개인키(PEM) 경로
 DIRECTOR_SIGN_KEYID    = "director_targets_keyid"             # 서명 keyid 표기
-SPEC_VERSION           = "1.0.0"                              # Uptane/TUF spec 버전(팀 규칙대로)
-EXPIRES_TTL_SEC        = 24 * 3600                            # 만료 24h (원하시면 조정)
+SPEC_VERSION           = "1.0.0"                              # Uptane/TUF spec 버전
+EXPIRES_TTL_SEC        = 24 * 3600                            # 만료 24h
 
 # ====== 파일명 파싱 & 버전 비교 =============================
 # 파일명 규칙: name.version.ext  (예: engine_control.2.1.bin)
@@ -76,9 +76,18 @@ def _sign_ed25519_pem(message: bytes, pem_path: str) -> str:
     sig = sk.sign(message)
     return base64.b64encode(sig).decode("ascii")
 
+def next_snapshot_version() -> int:
+    latest = 0
+    pat = re.compile(r"^(\d+)\.snapshot\.json$")
+    if os.path.isdir("./meta"):
+        for name in os.listdir("./meta"):
+            m = pat.match(name)
+            if m:
+                latest = max(latest, int(m.group(1)))
+    return latest + 1
+
 # ====== 메인: VVM/targets 비교 → 최종 targets_car(서명 포함) 생성 ===
-def select_and_build_targets_car(vvm_raw: Dict[str, Any],
-                                 global_targets: Dict[str, Any]) -> Dict[str, Any]:
+def make_targets_for_car(vvm_raw: Dict[str, Any], global_targets: Dict[str, Any]) -> Dict[str, Any]:
     # 1) 설치 목록 추출(ECU 다건)
     installed_list = extract_installed_list_from_vvm(vvm_raw)
 
@@ -115,10 +124,12 @@ def select_and_build_targets_car(vvm_raw: Dict[str, Any],
     # 3) 최종 signed 블록 구성 (여기서 version/expires도 채움)
     expires_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + EXPIRES_TTL_SEC))
 
+    version = next_snapshot_version()
+
     final_signed = {
         "_type": "targets",
         "spec_version": SPEC_VERSION,
-        "version": 1,               # version 증가하도록 수정 필요.
+        "version": version,
         "expires": expires_str,
         "targets": selected,
         "update": bool(any_update)
@@ -138,10 +149,4 @@ def select_and_build_targets_car(vvm_raw: Dict[str, Any],
         "signed": final_signed
     }
 
-    # 디버그(선택)
-    debug = {
-        "installed_count": len(installed_list),
-        "selected_count": len(selected),
-        "update": any_update
-    }
-    return {"targets_doc": final_doc, "debug": debug}
+    return final_doc
