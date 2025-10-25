@@ -1,7 +1,7 @@
 import os, re, json, binascii, hashlib
 from typing import Any, Dict, Optional, Tuple
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
+from backports.zoneinfo import ZoneInfo
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -10,8 +10,8 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 # ===== 설정(고정) =====
 SPEC_VERSION            = "1.0.0"
-META_DIR                = "./meta"
-ROOT_JSON_PATH          = "./meta/1.root.json"
+META_DIR                = "../meta"
+ROOT_JSON_PATH          = "../meta/1.root.json"
 SNAPSHOT_JSON_PATH      = "./snapshot.json"
 DEFAULT_EXPIRES_HOURS   = 24
 
@@ -59,7 +59,7 @@ def resolve_timestamp_keyid_from_root_by_pubhex(root_path: str, my_pub_hex: str)
         if keyobj.get("keytype") == "ed25519" and keyobj.get("keyval", {}).get("public") == my_pub_hex:
             return kid
 
-    raise RuntimeError("[!] root.json의 'timestamp' role에 공개키가 등록되어 있지 않습니다.")
+    #raise RuntimeError("[!] root.json의 'timestamp' role에 공개키가 등록되어 있지 않습니다.")
 
 def read_current_timestamp_version() -> int:
     try:

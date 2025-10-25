@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json, re, time, base64, os
 from typing import Dict, Any, List, Optional, Tuple
+from datetime import datetime, timedelta, timezone
 
 # ====== 설정(임시) ==========================================
 DIRECTOR_SIGN_KEY_PATH = "./keys/director_targets_priv.pem"   # Ed25519 개인키(PEM) 경로
@@ -122,7 +123,11 @@ def make_targets_for_car(vvm_raw: Dict[str, Any], global_targets: Dict[str, Any]
             selected[latest_fname] = latest_meta
 
     # 3) 최종 signed 블록 구성 (여기서 version/expires도 채움)
-    expires_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + EXPIRES_TTL_SEC))
+    now = datetime.now(timezone.utc)
+    expires_time = now + timedelta(seconds=EXPIRES_TTL_SEC)
+    expires_str = expires_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    #expires_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + EXPIRES_TTL_SEC))
 
     version = next_snapshot_version()
 

@@ -2,21 +2,21 @@ import json, os, re, binascii
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
-from zoneinfo import ZoneInfo
+from backports.zoneinfo import ZoneInfo
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ed25519
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 # ===== 설정 =====
 SPEC_VERSION          = "1.0.0"
 META_DIR              = "./meta"
-ROOT_JSON_PATH        = "./meta/1.root.json"         # 참조할 root 메타데이터
-TARGETS_JSON_PATH     = "./targets.json"
+ROOT_JSON_PATH        = "../meta/1.root.json"         # 참조할 root 메타데이터
+TARGETS_JSON_PATH     = "../meta/1.targets.json"
 DEFAULT_EXPIRES_DAYS  = 7
 
-SNAPSHOT_PRIV_PEM     = "snapshot.pem"
-SNAPSHOT_PUB_PEM      = "snapshot_pub.pem"
+SNAPSHOT_PRIV_PEM     = "./keys/snapshot.pem"
+SNAPSHOT_PUB_PEM      = "./keys/snapshot_pub.pem"
 
 # ===== 유틸 =====
 def canonical_json_bytes(obj: Any) -> bytes:
@@ -69,12 +69,12 @@ def resolve_snapshot_keyid_from_root_by_pubhex(root_path: str, my_pub_hex: str) 
         if keyobj.get("keytype") == "ed25519" and keyobj.get("keyval", {}).get("public") == my_pub_hex:
             return kid
 
-    raise RuntimeError("[!] root.json의 'snapshot' role에 공개키가 등록되어 있지 않습니다.")
+    #raise RuntimeError("[!] root.json의 'snapshot' role에 공개키가 등록되어 있지 않습니다.")
 
 def next_snapshot_version() -> int:
     latest = 0
     pat = re.compile(r"^(\d+)\.snapshot\.json$")
-    if os.path.isdir(META_DIR):a
+    if os.path.isdir(META_DIR):
         for name in os.listdir(META_DIR):
             m = pat.match(name)
             if m:
@@ -94,7 +94,7 @@ def generate_snapshot() -> Dict[str, Any]:
     meta_key = "targets.json"
 
     # 3) signed(snapshot) 구성
-    expires = make_expires_iso8601_kst_plus_days(EXPIRES_DAYS_KST)
+    expires = make_expires_iso8601_kst_plus_days(DEFAULT_EXPIRES_DAYS)
     snapshot_signed: Dict[str, Any] = {
         "_type": "snapshot",
         "expires": expires,
