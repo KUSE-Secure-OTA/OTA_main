@@ -101,7 +101,7 @@ def generate_version_report():
             "filepath": "brake_ecu_v1.5.bin",
             "fileinfo": {
                 "length": 52488,
-                "hashes": "b5d4045c3f466fa..."
+                "hashes": "b9d942ded471eb8f5ef821f4ad2ff93f7907e9c8f53e9d083c4ac7260c2336c8"
             }
         }
     }
@@ -181,9 +181,11 @@ def generate_vvm():
 
 # Get key informations
 def read_root(metadata, output_dir="keys_out"):
-    with open(metadata, "r", encoding="utf-8") as f:
-        rawData = json.load(f)
+    # with open(metadata, "r", encoding="utf-8") as f:
+    #     rawData = json.load(f)
 
+    rawData = metadata
+    
     keys_dict = rawData["signed"]["keys"]
     os.makedirs(output_dir, exist_ok=True)
     key_map = {}
@@ -210,9 +212,10 @@ def read_root(metadata, output_dir="keys_out"):
 
 # Verify metadata(multi-signature verification)
 def verify_multi_signature(metadata, key_info, output_dir="keys_out"):
-    with open(metadata, "r", encoding="utf-8") as f:
-        rawData = json.load(f)
+    # with open(metadata, "r", encoding="utf-8") as f:
+    #     rawData = json.load(f)
 
+    rawData = metadata
     verify_content = json.dumps(rawData["signed"], separators=(',', ':'), sort_keys=True).encode("utf-8")  
     threshold = key_info[rawData["signed"]["_type"]]["threshold"]
     verifyCnt = 0
