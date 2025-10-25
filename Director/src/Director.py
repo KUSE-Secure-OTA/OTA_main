@@ -6,7 +6,7 @@ import paho.mqtt.client as mqtt
 import base64
 from typing import Dict, Any
 from ecdsa import VerifyingKey, BadSignatureError
-from ecdsa import ed25519  # Ed25519 사용
+from ecdsa import Ed25519  # Ed25519 사용
 
 from targets_per_vehicle import make_targets_for_car
 from snapshot import generate_snapshot
@@ -23,10 +23,12 @@ def canonical_json_bytes(obj):
 def verify_vvm_signature(vvm: Dict[str, Any]) -> bool:
     sigs = vvm.get("signatures") or []
     if not sigs:
+        print("No Signature")
         return False
 
     signed_body = vvm.get("signed")
     if not isinstance(signed_body, dict):
+        print("Signed data is not dictionary")
         return False
 
     message = canonical_json_bytes(signed_body)
@@ -45,7 +47,7 @@ def verify_vvm_signature(vvm: Dict[str, Any]) -> bool:
             with open(pub_path, "rb") as f:
                 vk = VerifyingKey.from_pem(f.read(), hashfunc=None)
                 sig = base64.b64decode(sig_b64)
-                vk.verify(sig, message, sigdecode=ed25519.sigdecode)
+                vk.verify(sig, message, sigdecode=Ed25519.sigdecode)
                 return True
         except BadSignatureError:
             pass
@@ -101,7 +103,7 @@ class DirectorRepoHandler:
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
 
-        self.json_handler = JsonHandler()
+        #self.json_handler = JsonHandler()
 
     def connect_mqtt(self):
         self.client.connect(self.MQTT_BROKER, self.MQTT_PORT, 60)
@@ -121,66 +123,67 @@ class DirectorRepoHandler:
 
         print("\nReceive Manifest from Gateway\n")
 
-        # 0) VVM 최상위 서명 검증
-        if not verify_vvm_signature(payload):
-            print("[ERR] VVM signature verification failed → drop")
-            return
-        print("[OK] VVM signature verified")
+        # 0) VVM 최상위 서명 검증 -> 임시 생략
+        # if not verify_vvm_signature(payload):
+        #     print("[ERR] VVM signature verification failed → drop")
+        #     return
+        # print("[OK] VVM signature verified")
 
         # 1) 매니페스트 수신
         vehicle_manifest = payload
 
         # 2) 전역 targets 로드 (지금은 1.targets.json 고정)
         try:
-            with open("./targets.json", "r", encoding="utf-8") as f:
+            with open("../meta/1.targets.json", "r", encoding="utf-8") as f:
                 global_targets = json.load(f)
         except Exception as e:
             print(f"[ERR] failed to load global targets: {e}")
             return
 
         # 3) per-vehicle targets, snapshot doc 생성
+        print("="*50+"\nMake an update list\n")
         per_vehicle_doc = make_targets_for_car(vehicle_manifest, global_targets)
         snapshot_doc = generate_snapshot()
 
         # 결과 저장
         ver_targets = save_meta(per_vehicle_doc, "targets")
-        ver_snapshot = save_meta(snapsnapshot_doc, "snapshot")
+        ver_snapshot = save_meta(snapshot_doc, "snapshot")
 
         # timestamp 생성
         generate_timestamp()
 
-        # 4) publish(root->timestamp->snapshot->targets)
+        # 4) publish(root->timestamp->snapshot->targets) -> 일단 root만
         try:
-            with open("./root.json", "r", encoding="utf-8") as f:
+            with open("../meta/1.root.json", "r", encoding="utf-8") as f:
                 payload = f.read()
             client.publish(self.update_meta_topic, payload, qos=1)
             print("\nPublish root metadata\n")
         except Exception as e:
             print(f"[ERR] failed to publish timestamp: {e}")
 
-        try:
-            with open("./timestamp.json", "r", encoding="utf-8") as f:
-                payload = f.read()
-            client.publish(self.update_meta_topic, payload, qos=1)
-            print("\nPublish timestamp metadata\n")
-        except Exception as e:
-            print(f"[ERR] failed to publish timestamp: {e}")
+        # try:
+        #     with open("./timestamp.json", "r", encoding="utf-8") as f:
+        #         payload = f.read()
+        #     client.publish(self.update_meta_topic, payload, qos=1)
+        #     print("\nPublish timestamp metadata\n")
+        # except Exception as e:
+        #     print(f"[ERR] failed to publish timestamp: {e}")
         
-        try:
-            with open("./snapshot.json", "r", encoding="utf-8") as f:
-                payload = f.read()
-            client.publish(self.update_meta_topic, payload, qos=1)
-            print(f"\nPublish snapshot metadata (ver={ver_snapshot})\n")
-        except Exception as e:
-            print(f"[ERR] failed to publish snapshot: {e}")
+        # try:
+        #     with open("./snapshot.json", "r", encoding="utf-8") as f:
+        #         payload = f.read()
+        #     client.publish(self.update_meta_topic, payload, qos=1)
+        #     print(f"\nPublish snapshot metadata (ver={ver_snapshot})\n")
+        # except Exception as e:
+        #     print(f"[ERR] failed to publish snapshot: {e}")
 
-        try:
-            with open("./targets.json", "r", encoding="utf-8") as f:
-                payload = f.read()
-            client.publish(self.update_meta_topic, payload, qos=1)
-            print(f"\nPublish per-vehicle targets metadata (ver={ver_targets})\n")
-        except Exception as e:
-            print(f"[ERR] failed to publish targets: {e}")
+        # try:
+        #     with open("./targets.json", "r", encoding="utf-8") as f:
+        #         payload = f.read()
+        #     client.publish(self.update_meta_topic, payload, qos=1)
+        #     print(f"\nPublish per-vehicle targets metadata (ver={ver_targets})\n")
+        # except Exception as e:
+        #     print(f"[ERR] failed to publish targets: {e}")
 
 
 def configure_tls(client, ca_cert, client_cert, client_key):
@@ -190,10 +193,10 @@ def configure_tls(client, ca_cert, client_cert, client_key):
         keyfile= client_key,
         tls_version=ssl.PROTOCOL_TLSv1_2
     )
-    client.tls_insecure_set(False)
+    client.tls_insecure_set(True)
 
 if __name__ == "__main__":
-    handler = DirectorRepoHandler("192.168.86.37", 8883)
+    handler = DirectorRepoHandler("192.168.35.202", 8883)
     handler.connect_mqtt()
     handler.loop_mqtt()
 
