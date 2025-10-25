@@ -16,6 +16,13 @@
           "sha512": "1b25aadd04bb3b3db4538f7fcc09184c4544060dea6c6789819afe83ed076635225fc4350ffc70a93711d0050d66ed75f2f4a460894828217808bbf4e04d3399"
         },
         "length": 10
+      },
+      "brake_ecu_v2.1.bin": {
+        "hashes": {
+          "sha256": "90e0c9fa31938822f3bcba5c783bd1e5f016d4e11662d953a45486f290d0cde9",
+          "sha512": "d977910f34944b3527c12b7e268a0bcd7607bc1e605364b213b21bdf964a1f3476335c3e652791c6f33d5d97b50be7627c809efb326cdb272849f8340830b8b7"
+        },
+        "length": 10
       }
     },
     "version": 1
