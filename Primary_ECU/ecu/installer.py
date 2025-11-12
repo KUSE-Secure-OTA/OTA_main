@@ -20,8 +20,18 @@ class Installer:
             shutil.copy2(image_path, os.path.join(staging, os.path.basename(image_path)))
 
             active = self.storage.active_symlink()
-            if os.path.islink(active): os.unlink(active)
-            os.symlink(staging, active)
+            try:
+                if os.path.islink(active):
+                    os.unlink(active)
+                if os.path.exists(active) and not os.path.islink(active):
+                    raise RuntimeError(f"active path exists and is not symlink: {active}")
+                os.symlink(staging, active)
+            except (OSError, NotImplementedError):
+                # symlink 불가 환경 폴백: 디렉터리 복사
+                fallback = active if os.path.isdir(active) else active + "_dir"
+                if os.path.exists(fallback):
+                    shutil.rmtree(fallback, ignore_errors=True)
+                shutil.copytree(staging, fallback)
 
             self.storage.write_version(version)
             return InstallResult(ok=True)
@@ -33,5 +43,12 @@ class Installer:
         if not prev:
             raise RuntimeError("no previous version to rollback")
         active = self.storage.active_symlink()
-        if os.path.islink(active): os.unlink(active)
-        os.symlink(self.storage.staging_dir(prev), active)
+        if os.path.islink(active):
+            os.unlink(active)
+        try:
+            os.symlink(self.storage.staging_dir(prev), active)
+        except (OSError, NotImplementedError):
+            fallback = active if os.path.isdir(active) else active + "_dir"
+            if os.path.exists(fallback):
+                shutil.rmtree(fallback, ignore_errors=True)
+            shutil.copytree(self.storage.staging_dir(prev), fallback)
