@@ -7,9 +7,8 @@ from ecu.storage import Storage
 from ecu.transport import Transport
 from ecu.verifier import Verifier
 from ecu.installer import Installer
-from manage_meta import generate_vvm  # 기존 그대로 사용
 
-BROKER = "192.168.35.202"
+BROKER = "192.168.182.159"
 PORT = 8883
 
 TOPIC_NOTIFY_VERSION = "primary/version"
@@ -17,8 +16,8 @@ TOPIC_UPDATE_META    = "director/updateMeta"   # 디렉터가 메타/이미지 u
 TOPIC_REPORT         = "primary/report"
 
 CA_CERT     = "./utils/certs/ca.crt"
-CLIENT_CERT = "./utils/certs/mqtt_client.crt"
-CLIENT_KEY  = "./utils/certs/mqtt_client.key"
+CLIENT_CERT = "./utils/certs/client.crt"
+CLIENT_KEY  = "./utils/certs/client.key"
 
 class Reporter:
     def __init__(self, client: mqtt.Client): self.client = client
@@ -42,8 +41,7 @@ class PrimeEcuHandler:
         self.reporter = Reporter(self.client)
         self.updater  = Updater(self.storage, self.transport, self.verifier, self.installer, self.reporter)
 
-        # VVM 생성 및 전송(기존 로직 유지)
-        generate_vvm()
+        # VVM 전송
         with open("./vehicle_version_manifest.json","r",encoding="utf-8") as f:
             vvm = json.load(f)
         self.client.publish(TOPIC_NOTIFY_VERSION, json.dumps(vvm, ensure_ascii=False).encode("utf-8"), qos=0)
@@ -54,13 +52,6 @@ class PrimeEcuHandler:
 
     def on_message(self, client, userdata, msg):
         if msg.topic == TOPIC_UPDATE_META:
-            # 디렉터가 내려주는 메시지 예시 형식:
-            # {
-            #   "version": "1.2.3",
-            #   "meta_url": "http://.../meta_1.2.3.json",
-            #   "image_url": "http://.../image_1.2.3.bin",
-            #   "expected_sha256": "abcd..."
-            # }
             data = json.loads(msg.payload.decode("utf-8"))
             req = UpdateRequest(
                 version=data["version"],

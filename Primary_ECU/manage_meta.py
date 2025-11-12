@@ -92,47 +92,6 @@ def generate_root(root_threshold, targets_threshold):
 
     print("\n", '='*50, "\nGenerate Root metadata\n", '='*50)
 
-# Make ECU Version Report
-def generate_version_report():
-    rawData = {
-        "ecu_serial": "brake_ecu_002",
-        "timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "installed_image": {
-            "filepath": "brake_ecu_v1.5.bin",
-            "fileinfo": {
-                "length": 52488,
-                "hashes": "b9d942ded471eb8f5ef821f4ad2ff93f7907e9c8f53e9d083c4ac7260c2336c8"
-            }
-        }
-    }
-
-    signatures = []
-    signed_bytes = json.dumps(rawData, separators=(',', ':'), sort_keys=True).encode("utf-8")
-
-    makeECUKeys(rawData["ecu_serial"])
-    signed_content = makeSignature(f"signKey_{rawData['ecu_serial']}.pem", signed_bytes)
-
-    with open(f"signKey_{rawData['ecu_serial']}.pem", "rb") as f:
-        pem_content = f.read()
-
-    keyId = hashlib.sha256(pem_content).hexdigest()
-    signatures.append({
-        "keyid": keyId,
-        "sig": signed_content.decode("utf-8")
-    })
-
-    os.makedirs("version_report", exist_ok=True)
-
-    report_structure = {
-        "signature": signatures,
-        "signed": rawData
-    }
-
-    with open(f"version_report/{rawData['ecu_serial']}.json", "w", encoding="utf-8") as f:
-        json.dump(report_structure, f, indent=2)
-
-    print("\n", '='*50, "\nGenerate Version Report\n", '='*50)
-
 # Make Vehicle Version Manifest
 def generate_vvm():
     # Basic Info
@@ -250,5 +209,4 @@ if __name__ == '__main__':
     print(key_info)
     verify_multi_signature("./root.json", key_info)
 
-    generate_version_report()
     generate_vvm()
