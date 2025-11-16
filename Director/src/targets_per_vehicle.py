@@ -1,157 +1,171 @@
-from __future__ import annotations
-import json, re, time, base64, os
-from typing import Dict, Any, List, Optional, Tuple
+# Director/src/targets_per_vehicle.py
+import json, os, re, binascii
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-# ====== 설정(임시) ==========================================
-DIRECTOR_SIGN_KEY_PATH = "./keys/director_targets_priv.pem"   # Ed25519 개인키(PEM) 경로
-DIRECTOR_SIGN_KEYID    = "director_targets_keyid"             # 서명 keyid 표기
-SPEC_VERSION           = "1.0.0"                              # Uptane/TUF spec 버전
-EXPIRES_TTL_SEC        = 24 * 3600                            # 만료 24h
+from config import DIRECTOR_KEYS_DIR, DIRECTOR_METADATA_DIR, TARGETS_EXPIRES_DAYS
 
-# ====== 파일명 파싱 & 버전 비교 =============================
-# 파일명 규칙: name.version.ext  (예: engine_control.2.1.bin)
-_RX_DOT = re.compile(r'^(?P<name>.+?)\.(?P<ver>\d+(?:\.\d+)*)\.(?P<ext>[^.]+)$')
+SPEC_VERSION = "1.0.0"
+ROOT_JSON_PATH = DIRECTOR_METADATA_DIR / "root.json"
 
-def parse_name_version(filename: str) -> Optional[Tuple[str, str, str]]:
-    m = _RX_DOT.match(filename)
-    if not m:
-        return None
-    return m.group('name'), m.group('ver'), '.' + m.group('ext')
+# 파일명 파서: name_X.Y.bin 형식
+_RX_US  = re.compile(r'^(?P<name>.+?)_(?P<ver>\d+(?:\.\d+)*)(?P<ext>\.[^.]+)$')
 
-# 고정 자리수 가정: "a.b.c" → 정수 리스트로 단순 비교(패딩 없음)
-def _split_ver_fixed(ver: str) -> List[int]:
+def parse_name_version(filename: str) -> Optional[Tuple[str,str,str]]:
+    m = _RX_US.match(filename)
+    if m:
+        ext = m.group('ext')
+        return m.group('name'), m.group('ver'), ext
+    return None
+
+def _split_ver(ver: str) -> List[int]:
     return [int(x) for x in ver.split('.')]
 
 def version_gt(a: str, b: str) -> bool:
-    return _split_ver_fixed(a) > _split_ver_fixed(b)
+    return _split_ver(a) > _split_ver(b)
 
-# ====== VVM → 설치 목록(다건) 추출 ==========================
-# 반환: [(ecu_serial, filename, version, fileinfo), ...]
-def extract_installed_list_from_vvm(vvm_raw: Dict[str, Any]) -> List[Tuple[str, str, str, Dict[str, Any]]]:
-    out: List[Tuple[str, str, str, Dict[str, Any]]] = []
-    body = vvm_raw.get("signed", vvm_raw)
-    evrs = body.get("ecu_version_reports", []) or []
-    for evr in evrs:
-        s = (evr or {}).get("signed", {}) or {}
-        ecu_id = s.get("ecu_serial") or ""
-        installed = s.get("installed_image") or {}
-        if not isinstance(installed, dict) or not installed:
-            continue
-        # {"engine_control.2.1.bin": {...}} → 첫(유일) 항목 사용
-        filename, fileinfo = next(iter(installed.items()))
-        pv = parse_name_version(filename)
-        if not pv:
-            continue
-        _, ver, _ = pv
-        out.append((ecu_id, filename, ver, fileinfo))
-    return out
-
-# ====== targets에서 동일 "이름(name)"의 최신(=유일) 항목 찾기 =====
-# 전제: targets.json에는 해당 name의 "최신 1개"만 존재
-def find_latest_in_targets_by_name(global_targets: Dict[str, Any], base_name: str) -> Optional[Tuple[str, Dict[str, Any], str]]:
-    all_targets = (global_targets.get("signed") or {}).get("targets") or {}
-    for fname, meta in all_targets.items():
-        pv = parse_name_version(fname)
-        if not pv:
-            continue
-        name, ver, _ = pv
-        if name == base_name:
-            return fname, meta, ver
-    return None
-
-# ====== Canonical JSON (서명 바이트 고정) ===================
 def canonical_json_bytes(obj: Any) -> bytes:
     return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
-# ====== Ed25519 서명 (cryptography 사용) ====================
 def _sign_ed25519_pem(message: bytes, pem_path: str) -> str:
-    from cryptography.hazmat.primitives import serialization
-    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-
-    with open(pem_path, "rb") as f:
-        key_data = f.read()
+    key_data = Path(pem_path).read_bytes()
     sk = serialization.load_pem_private_key(key_data, password=None)
     if not isinstance(sk, Ed25519PrivateKey):
-        raise TypeError("Expected Ed25519 private key in PEM")
+        raise TypeError("Expected Ed25519 private key")
     sig = sk.sign(message)
-    return base64.b64encode(sig).decode("ascii")
+    return binascii.hexlify(sig).decode("ascii")
 
-def next_snapshot_version() -> int:
-    latest = 0
-    pat = re.compile(r"^(\d+)\.snapshot\.json$")
-    if os.path.isdir("./meta"):
-        for name in os.listdir("./meta"):
-            m = pat.match(name)
-            if m:
-                latest = max(latest, int(m.group(1)))
-    return latest + 1
+def _load_targets_keyid_from_root(root_path: Path = ROOT_JSON_PATH) -> str:
+    if not root_path.exists():
+        raise FileNotFoundError(f"root.json not found: {root_path}")
+    root_raw = json.loads(root_path.read_text(encoding="utf-8"))
+    body = root_raw.get("signed", root_raw)
+    roles = body.get("roles") or {}
+    t_role = roles.get("targets") or {}
+    keyids = t_role.get("keyids") or []
+    if not keyids:
+        raise ValueError("No targets keyids found in root.json (roles.targets.keyids)")
+    # thresholds = 1
+    return keyids[0]
 
-# ====== 메인: VVM/targets 비교 → 최종 targets_car(서명 포함) 생성 ===
-def make_targets_for_car(vvm_raw: Dict[str, Any], global_targets: Dict[str, Any]) -> Dict[str, Any]:
-    # 1) 설치 목록 추출(ECU 다건)
+# def next_targets_version() -> int:
+#     latest = 0
+#     pat = re.compile(r"^(\d+)\.targets\.json$")
+#     if DIRECTOR_METADATA_DIR.is_dir():
+#         for name in os.listdir(DIRECTOR_METADATA_DIR):
+#             m = pat.match(name)
+#             if m:
+#                 latest = max(latest, int(m.group(1)))
+#     return latest + 1
+
+def _write_targets_json(doc: Dict[str, Any]) -> Path:
+    out = DIRECTOR_METADATA_DIR / "targets_per_vehicle.json"
+    out.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
+    return out
+
+def extract_installed_list_from_vvm(vvm_raw: Dict[str, Any]) -> List[Tuple[str,str,str,Dict[str,Any]]]:
+    """
+    반환: [(ecu_serial, filename, version_str, fileinfo_dict), ...]
+    """
+    out: List[Tuple[str,str,str,Dict[str,Any]]] = []
+    body = vvm_raw.get("signed", vvm_raw)
+    evs = body.get("ecu_version", []) or []
+    for ev in evs:
+        ecu_id = (ev or {}).get("ecu_serial") or ""
+        img = (ev or {}).get("target_image") or {}
+        if not isinstance(img, dict) or not img:
+            continue
+        fname = img.get("filename")
+        finfo = img.get("fileinfo") or {}
+        if not fname or not isinstance(finfo, dict):
+            continue
+        pv = parse_name_version(fname)
+        if not pv:
+            continue
+        _, ver, _ = pv
+        out.append((ecu_id, fname, ver, finfo))
+    return out
+
+def build_global_map_by_ecu(global_targets: Dict[str, Any]) -> Dict[str, Tuple[str, Dict[str, Any]]]:
+    out: Dict[str, Tuple[str, Dict[str, Any]]] = {}
+    arr = (global_targets.get("signed") or {}).get("targets") or []
+    if not isinstance(arr, list):
+        return out
+    for item in arr:
+        ecu = (item or {}).get("ecu_serial")
+        ti  = (item or {}).get("target_image") or {}
+        if not ecu or not isinstance(ti, dict):
+            continue
+        fname = ti.get("filename")
+        finfo = ti.get("fileinfo") or {}
+        if not fname or not isinstance(finfo, dict):
+            continue
+        out[ecu] = (fname, finfo)
+    return out
+
+# --- 메인: 비교 → per-vehicle targets(리스트 스키마) 생성/서명 ---
+def make_targets_for_car(vvm_raw: Dict[str, Any], global_targets: Dict[str, Any]) -> Path:
     installed_list = extract_installed_list_from_vvm(vvm_raw)
+    gmap = build_global_map_by_ecu(global_targets)
 
-    # 2) 업데이트 대상 선별
-    selected: Dict[str, Any] = {}
+    selected_list: List[Dict[str, Any]] = []
     any_update = False
 
-    for ecu_id, installed_fname, installed_ver, installed_fileinfo in installed_list:
-        parsed = parse_name_version(installed_fname)
-        if not parsed:
+    for ecu_id, cur_fname, cur_ver, cur_finfo in installed_list:
+        g = gmap.get(ecu_id)
+        if not g:
             continue
-        base_name, _, _ = parsed
-
-        found = find_latest_in_targets_by_name(global_targets, base_name)
-        if not found:
-            # targets에 해당 name이 없으면 스킵(정책상 update=False로 간주)
+        best_fname, best_finfo = g
+        pv_best = parse_name_version(best_fname)
+        pv_cur  = parse_name_version(cur_fname)
+        if not pv_best or not pv_cur:
             continue
+        _, best_ver, _ = pv_best
 
-        latest_fname, latest_meta, latest_ver = found
-
-        # targets(최신) > 설치버전 ?
+        need_update = False
         try:
-            need_update = version_gt(latest_ver, installed_ver)
+            need_update = version_gt(best_ver, cur_ver)
         except Exception:
-            # 포맷 이슈 시 해시 비교 보조
-            best_sha = (latest_meta.get("hashes") or {}).get("sha256")
-            cur_sha  = (installed_fileinfo.get("hashes") or {}).get("sha256")
-            need_update = bool(best_sha and cur_sha and best_sha != cur_sha)
+            cur_sha  = ((cur_finfo.get("hashes") or {}) or {}).get("sha256")
+            best_sha = ((best_finfo.get("hashes") or {}) or {}).get("sha256")
+            need_update = bool(cur_sha and best_sha and cur_sha != best_sha)
 
         if need_update:
             any_update = True
-            selected[latest_fname] = latest_meta
+            selected_list.append({
+                "ecu_serial": ecu_id,
+                "target_image": {
+                    "filename": best_fname,
+                    "fileinfo": best_finfo
+                }
+            })
 
-    # 3) 최종 signed 블록 구성 (여기서 version/expires도 채움)
     now = datetime.now(timezone.utc)
-    expires_time = now + timedelta(seconds=EXPIRES_TTL_SEC)
-    expires_str = expires_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    #expires_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + EXPIRES_TTL_SEC))
-
-    version = next_snapshot_version()
+    expires_str = (now + timedelta(days=TARGETS_EXPIRES_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    version = 1
 
     final_signed = {
         "_type": "targets",
         "spec_version": SPEC_VERSION,
         "version": version,
         "expires": expires_str,
-        "targets": selected,
-        "update": bool(any_update)
+        "targets": selected_list,
+        "update": bool(any_update),
     }
 
-    # 4) Director 키로 서명
-    if not os.path.exists(DIRECTOR_SIGN_KEY_PATH):
-        raise FileNotFoundError(f"Director signing key not found: {DIRECTOR_SIGN_KEY_PATH}")
+    sign_key_path = DIRECTOR_KEYS_DIR / "target.pem"
+    if not sign_key_path.exists():
+        raise FileNotFoundError(f"Director signing key not found: {sign_key_path}")
 
     msg = canonical_json_bytes(final_signed)
-    sig_b64 = _sign_ed25519_pem(msg, DIRECTOR_SIGN_KEY_PATH)
+    sig_b64 = _sign_ed25519_pem(msg, str(sign_key_path))
+    targets_keyid = _load_targets_keyid_from_root()
 
     final_doc = {
-        "signatures": [
-            {"keyid": DIRECTOR_SIGN_KEYID, "sig": sig_b64}
-        ],
-        "signed": final_signed
+        "signatures": [{"keyid": targets_keyid, "sig": sig_b64}],
+        "signed": final_signed,
     }
-
-    return final_doc
+    return _write_targets_json(final_doc)
