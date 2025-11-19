@@ -80,9 +80,12 @@ def chunk_file_fastcdc(path: str, base_dir: str, metrics):
         if size < MIN:
             data = mm[:]
             h = hashlib_sha256(data); hashes.append(h)
-            metrics['chunks'].append(h)
+            #metrics['chunks'].append(h)
 
-            write_chunk_if_absent(h, data, metrics)
+            created = write_chunk_if_absent(h, data, metrics)
+            if created:
+                metrics['chunks'].append(h)
+
             metrics['chunk_sizes'].append(len(data))
             metrics['total_chunks'] += 1
             metrics['total_bytes']  += len(data)
@@ -100,7 +103,10 @@ def chunk_file_fastcdc(path: str, base_dir: str, metrics):
                 h = hashlib_sha256(data); hashes.append(h)
                 metrics['chunks'].append(h)
 
-                write_chunk_if_absent(h, data, metrics)
+                created = write_chunk_if_absent(h, data, metrics)
+                if created:
+                    metrics['chunks'].append(h)
+
                 metrics['chunk_sizes'].append(len(data))
                 metrics['total_chunks'] += 1
                 metrics['total_bytes']  += len(data)
@@ -171,6 +177,13 @@ def split_all(source_path=SOURCE_OCI_DIR):
         for n in files:
             chunk_file_fastcdc(os.path.join(root, n), source_dir, metrics)
     t1 = time.perf_counter()
+
+    manifests_archive = os.path.join(ROOT_DIR, 'manifests.tar.gz')
+    if os.path.exists(manifests_archive):
+        os.remove(manifests_archive)
+    with tarfile.open(manifests_archive, 'w:gz') as tar:
+        tar.add(MANIFESTS_DIR, arcname=os.path.basename(MANIFESTS_DIR))
+    print(f"  매니페스트 압축 생성: {manifests_archive}")
 
     # 통계
     count = metrics['total_chunks']
