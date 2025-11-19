@@ -1,6 +1,8 @@
 import os
 import time
 import json
+import tarfile
+import shutil
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from utils.fastcdc_chunking import ensure_dirs, split_all
@@ -49,6 +51,39 @@ class FileChangeHandler(FileSystemEventHandler):
             json.dump(split_metrics, fp, indent=4)
 
         print(f"[watchdog] target_new.json 생성 완료: {output_json_path}")
+
+         # 3) 새로 생성된 청크들만 압축 (metrics['chunks'] 사용)
+        new_chunks = split_metrics.get("chunks", [])
+        chunks_archive_path = os.path.join(ROOT_DIR, "new_chunks.tar.gz")
+
+        with tarfile.open(chunks_archive_path, "w:gz") as tar:
+            for h in new_chunks:
+                chunk_path = os.path.join(CHUNKS_DIR, h)
+                if os.path.exists(chunk_path):
+                    # 압축 안에서의 이름은 파일명만 사용 (필요하면 경로 붙여도 됨)
+                    tar.add(chunk_path, arcname=h)
+        print(f"[watchdog] 새 청크 압축 생성 완료: {chunks_archive_path}")
+        
+        chunks_archive_dst = os.path.join(self.image_dir, "new_chunks.tar.gz")
+        # 이미 있으면 덮어쓰기
+        if os.path.exists(chunks_archive_dst):
+            os.remove(chunks_archive_dst)
+        shutil.move(chunks_archive_path, chunks_archive_dst)
+        print(f"[watchdog] new_chunks.tar.gz 이동 완료: {chunks_archive_dst}")
+        
+        
+        manifests_archive_src = os.path.join(ROOT_DIR, "manifests.tar.gz")
+        if os.path.exists(manifests_archive_src):
+            manifests_archive_dst = os.path.join(self.image_dir, "manifests.tar.gz")
+            # 이미 있으면 덮어쓰기
+            if os.path.exists(manifests_archive_dst):
+                os.remove(manifests_archive_dst)
+            shutil.move(manifests_archive_src, manifests_archive_dst)
+            print(f"[watchdog] manifests.tar.gz 이동 완료: {manifests_archive_dst}")
+        else:
+            print("[watchdog] 경고: manifests.tar.gz 를 찾지 못했습니다.")
+
+
 
 if __name__ == "__main__":
     IMAGE_DIR = "../Image_Repo"
