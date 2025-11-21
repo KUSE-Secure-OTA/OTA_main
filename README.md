@@ -1,17 +1,10 @@
-# OTA_main
-## Branch for Director Repository
-
-### Director
-- Director Repository
-### Image
-- Image Repositoy
-- 임시
-## Upload
-- Watchdog 구현
-- 해당 디렉터리에 업데이트 파일 업로드
-### 상위 디렉터리(Local)
-- root 메타데이터 생성
-
-## 수정 필요
-1. 코드 상에서 metadata 저장 위치, key 이름 및 참조 위치 변경 필요
-2. root 생성 시 Director, Image 다른 키 쓰도록 바꿔야 함
+# OTA_main : targets 형식 변경
+- OTA_Director_Server에서 새로운 형식대로 메타데이터 생성하도록 코드 수정하였습니다.
+## chunking_watchdog.py
+- ../src_add/stage에 올라가는 새로운 이미지(.tar) 감지
+- fastcdc_chunking.py의 split_all()에 넣어서 청크 분할
+- 리턴값 이용해 manifest(ex.ivi_1.0.0.json) 생성
+- manifest 첨가된 targets.json 최신화
+## fastcdc_chunking.py
+- 전달받은 .tar 형식 이미지 압축 해제 후 분할
+- manifest의 signed 부분 형식에 맞게 넣어서 리턴
