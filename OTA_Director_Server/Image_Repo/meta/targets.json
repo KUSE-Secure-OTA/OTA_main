@@ -1,0 +1,88 @@
+{
+  "signatures": [
+    {
+      "keyid": "b06e0671ab59b6b3f0ee8579495da0d0d855ef737451d821c206c57d19ab557f",
+      "sig": "ff1cc98aea880bbac991fce4a69a8a9535944556b0c1a365954bd72eb7068bb0e6da8665e1c74f7235e2c69660007eef7592ba52620248c6a322a3eb9b92fe05"
+    }
+  ],
+  "signed": {
+    "_type": "targets",
+    "spec_version": "1.0.0",
+    "version": 10,
+    "expires": "2026-11-21T14:34:54Z",
+    "targets": {
+      "cluster_1.0.0": {
+        "hashes": {
+          "sha256": "8947215cea5a96a74ffbe674c099c3a20acc836a1f5b0d6dc7d66449f78e1b4c",
+          "sha512": "ed97440b8c357f4fd0f9380817d07335cf190ce6571067fa5a2980e2ffadc4aff0889a8f6b72f2c34292ed0aca5403ce12c532687ff3a2538a78be036feba0bd"
+        },
+        "length": 331233792
+      },
+      "ivi_2.0.0": {
+        "hashes": {
+          "sha256": "6f45971a62bf94d358bde52da83e4bb1be0905ea285aa43517e4c77ca3470e1d",
+          "sha512": "79695a47d57a5292c6dd5f3737075dc93aa6ba2f281ec5891dcafdc8b76dace4b302c459d52c532ab2eeeb179dcb365533963b6f21a82803d2c98a45107aba07"
+        },
+        "length": 1328254464
+      }
+    },
+    "delegations": {
+      "keys": {
+        "6e4b73367e6d36182a864ad6b7513bd06e8680e1bfc98766f782df1ac28b483a": {
+          "keytype": "ed25519",
+          "scheme": "ed25519",
+          "keyid_hash_algorithms": [
+            "sha256"
+          ],
+          "keyval": {
+            "public": "DdTIYRICyWzd9iVmN4f6vS8KqkWzqx/+rYZNm7KfEfw="
+          }
+        },
+        "3bf905fc236d890fa4b43ad1c9692c4fc22b628586d47b087aec4a3092b10e56": {
+          "keytype": "ed25519",
+          "scheme": "ed25519",
+          "keyid_hash_algorithms": [
+            "sha256"
+          ],
+          "keyval": {
+            "public": "0dd4c8611202c96cddf625663787fabd2f0aaa45b3ab1ffead864d9bb29f11fc"
+          }
+        },
+        "3e791b7788cc78d306f6a08184762de1aa84f14e108912326cbc48bc64ad789f": {
+          "keytype": "ed25519",
+          "scheme": "ed25519",
+          "keyid_hash_algorithms": [
+            "sha256"
+          ],
+          "keyval": {
+            "public": "a7bdc274c2572fe6172fdb4e8b6f0131b5fe82bafd2f62c0de1787f58f213196"
+          }
+        }
+      },
+      "roles": [
+        {
+          "name": "ivi",
+          "keyids": [
+            "3bf905fc236d890fa4b43ad1c9692c4fc22b628586d47b087aec4a3092b10e56"
+          ],
+          "paths": [
+            "ivi/*"
+          ],
+          "terminating": false,
+          "threshold": 1
+        },
+        {
+          "name": "cluster",
+          "keyids": [
+            "3e791b7788cc78d306f6a08184762de1aa84f14e108912326cbc48bc64ad789f"
+          ],
+          "paths": [
+            "cluster/*"
+          ],
+          "terminating": false,
+          "threshold": 1
+        }
+      ]
+    }
+  }
+}
