@@ -18,9 +18,11 @@ from ecdsa import SigningKey
 # from utils.json_handler import JsonHandler
 from utils.signature.pub_signature import make_payload_with_signatures
 from utils.signature.sub_signature import verify_multi_signature
+from utils.snapshot import generate_snapshot
+from utils.timestamp import generate_timestamp
 
 BASE_DIR   = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-WATCH_DIR  = os.path.join(BASE_DIR, "Image_Repo")          # new_chunks.tar.gz, manifests.tar.gz 위치
+WATCH_DIR  = os.path.join(BASE_DIR, "Image_Repo/meta")          # new_chunks.tar.gz, manifests.tar.gz 위치
 CHUNKS_DIR = os.path.join(WATCH_DIR, "chunks_storage")  # 항상 서비스할 청크 디렉터리
 MANIFESTS_TAR = os.path.join(WATCH_DIR, "manifests.tar.gz")
 NEW_CHUNKS_TAR = os.path.join(WATCH_DIR, "new_chunks.tar.gz")
@@ -51,19 +53,21 @@ class FlaskServer:
                 return jsonify({"error": "chunk not found"}), 404
             return send_from_directory(CHUNKS_DIR, chunk_name, as_attachment=True)
 
-        # manifests.tar.gz 서비스
-        @self.app.route("/manifests", methods=["GET"])
-        def get_manifests():
+        # Metadata 서비스
+        @self.app.route("/meta/<path:meta_type>", methods=["GET"])
+        def get_manifests(meta_type):
             """
-            manifests.tar.gz는 처음엔 없을 수도 있음.
-            나중에 파일이 생성/갱신되면 자동으로 최신 버전이 내려감.
+            예: GET /meta/targets.json
+              → WATCH_DIR/meta/targets.json
             """
-            if not os.path.exists(MANIFESTS_TAR):
+            full_path = os.path.join(WATCH_DIR, meta_type)
+            if not os.path.exists(full_path):
                 return jsonify({"error": "manifests not ready"}), 404
+            
             # WATCH_DIR 기준으로 파일 하나만 내려줌
             return send_from_directory(
                 WATCH_DIR,
-                os.path.basename(MANIFESTS_TAR),
+                meta_type,
                 as_attachment=True
             )
 
@@ -130,7 +134,8 @@ class FileHandler:
         if msg.topic == self.MQTT_REQUEST_TOPIC:
             print("[MQTT] Meta Data request received from Primary ECU")
 
-            with open("../Image_Repo/target_new.json", "r", encoding="utf-8") as f:
+            # Send the timestamp metadata
+            with open("../Image_Repo/meta/timestamp.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
             
             upload_url = f"https://{self.MQTT_BROKER}:8443"
@@ -194,6 +199,15 @@ class FileChangeHandler(FileSystemEventHandler):
         # self.json_handler = JsonHandler()
         self.signing_key_path = "./utils/signature/image_private.pem"
 
+    def on_modified(self, event):
+        fname = os.path.basename(event.src_path)
+        
+        if fname == "targets.json":
+            s_path = generate_snapshot()
+            print(f"[Image] Update a new snapshot metadata: {s_path}\n")
+            ts_path = generate_timestamp()
+            print(f"[Image] Update a new timestamp metadata: {ts_path}\n")
+    
     def on_created(self, event):
         if event.is_directory:
             TARGET_PATH = "../data/target_new.json"
@@ -305,7 +319,7 @@ if __name__ == "__main__":
 
     MQTT_BROKER = "192.168.35.202"
     MQTT_PORT = 8883
-    WATCH_DIR = "../Image_Repo"
+    WATCH_DIR = "../Image_Repo/meta"
     files_path = "./data/update_image.tar.xz"
     # update_image.tar.xz 경로도 통일 필요
 

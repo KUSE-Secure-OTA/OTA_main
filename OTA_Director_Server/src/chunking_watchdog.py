@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import re
 import time
@@ -16,15 +18,17 @@ from cryptography.hazmat.backends import default_backend
 
 from utils.fastcdc_chunking import ensure_dirs, split_all, CHUNKS_DIR
 
+#==========================================================================================================================
+#==========================================================================================================================
 # 로컬(Director 서버) 쪽 기본 경로
 ROOT_DIR   = '../src_add'
-WATCH_DIR  = os.path.join(ROOT_DIR, 'stage')  # 새 tar 올라오는 곳
+WATCH_DIR  = os.path.join(ROOT_DIR, 'stage')  # 업데이트 이미지 업로드 위치
 
 # Image, Director 쪽 기본 경로
 IMAGE_REPO_DEFAULT    = '../Image_Repo'
 DIRECTOR_REPO_DEFAULT = '../../Director'
 
-# 키 경로
+# 키 경로(Root metadata)
 KEY_ROOT = '../keys'
 ECU_KEY_CONFIG: Dict[str, Dict[str, str]] = {
     "ivi": {
@@ -41,6 +45,8 @@ ECU_KEY_CONFIG: Dict[str, Dict[str, str]] = {
 TARGETS_PUB_PATH  = os.path.join(KEY_ROOT, "targets_pub.pem")
 TARGETS_PRIV_PATH = os.path.join(KEY_ROOT, "targets.pem")
 
+#==========================================================================================================================
+#==========================================================================================================================
 
 def canonical_json_bytes(obj: Any) -> bytes:
     return json.dumps(
@@ -149,7 +155,7 @@ def load_targets_pub_key_entry() -> tuple[str, Dict[str, Any]]:
     key_obj = {
         "keytype": "ed25519",
         "scheme": "ed25519",
-        "keyid_hash_algorithms": ["sha256"],
+        "keyid_hash_algorithms": ["sha256", "sha512"],
         "keyval": {
             "public": pub_hex,
         },
@@ -578,6 +584,7 @@ class FileHandler:
 if __name__ == "__main__":
     IMAGE_DIR = IMAGE_REPO_DEFAULT
 
+    ensure_dirs(WATCH_DIR)
     file_handler = FileHandler(WATCH_DIR, IMAGE_DIR)
     file_handler.start_watching()
 

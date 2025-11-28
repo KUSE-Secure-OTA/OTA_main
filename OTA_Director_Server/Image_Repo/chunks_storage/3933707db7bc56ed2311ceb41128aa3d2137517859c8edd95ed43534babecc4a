@@ -1,0 +1,1 @@
+{"schemaVersion":2,"manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:57d3fe46a3fdd026a422fbcd8af14df31458ae2f4bc4f93a6bf0e1c47eb4c22f","size":1338,"annotations":{"org.opencontainers.image.ref.name":"docker.io/hanbin6157/seame_hu_app:1.0.0"}}]}

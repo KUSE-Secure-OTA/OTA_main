@@ -1,15 +1,15 @@
 {
   "signatures": [
     {
-      "keyid": "b06e0671ab59b6b3f0ee8579495da0d0d855ef737451d821c206c57d19ab557f",
-      "sig": "ff1cc98aea880bbac991fce4a69a8a9535944556b0c1a365954bd72eb7068bb0e6da8665e1c74f7235e2c69660007eef7592ba52620248c6a322a3eb9b92fe05"
+      "keyid": "507b54e2b4b3606dd011a9455f9fbc043b8cb71d9601e9b8d449aafab48bf10d",
+      "sig": "c966c5bf8d8249b3ea186e6d869d9507f051a1cbb68a84db73c4903a34adf6b2fda244c6b0a182956d9f561e8e14dadbf175152bf1445587454c259b7b75410d"
     }
   ],
   "signed": {
     "_type": "targets",
     "spec_version": "1.0.0",
-    "version": 10,
-    "expires": "2026-11-21T14:34:54Z",
+    "version": 25,
+    "expires": "2026-11-28T01:14:03Z",
     "targets": {
       "cluster_1.0.0": {
         "hashes": {
@@ -57,13 +57,23 @@
           "keyval": {
             "public": "a7bdc274c2572fe6172fdb4e8b6f0131b5fe82bafd2f62c0de1787f58f213196"
           }
+        },
+        "f446fb01473aa70d7fbe1a954da9fe412b73bd792f8ce478eb9ec3acbe7f529c": {
+          "keytype": "ed25519",
+          "scheme": "ed25519",
+          "keyid_hash_algorithms": [
+            "sha256"
+          ],
+          "keyval": {
+            "public": "46c9ebaabb47c7562f9d905386bbb756f4a6e0dc6ffb82e40bc19fa77e4e76d9"
+          }
         }
       },
       "roles": [
         {
           "name": "ivi",
           "keyids": [
-            "3bf905fc236d890fa4b43ad1c9692c4fc22b628586d47b087aec4a3092b10e56"
+            "f446fb01473aa70d7fbe1a954da9fe412b73bd792f8ce478eb9ec3acbe7f529c"
           ],
           "paths": [
             "ivi/*"
