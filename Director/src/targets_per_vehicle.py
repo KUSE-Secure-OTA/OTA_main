@@ -323,7 +323,7 @@ def make_targets_for_car(vvm_raw: Dict[str, Any], global_targets: Dict[str, Any]
     }
 
     # 서명
-    sign_key_path = DIRECTOR_KEYS_DIR / "target.pem"
+    sign_key_path = DIRECTOR_KEYS_DIR / "targets.pem"
     if not sign_key_path.exists():
         raise FileNotFoundError(f"Director signing key not found: {sign_key_path}")
 

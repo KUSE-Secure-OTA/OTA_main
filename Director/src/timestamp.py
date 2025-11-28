@@ -1,7 +1,10 @@
 import os, re, json, binascii, hashlib
 from typing import Any, Dict, Optional, Tuple
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
+try:
+    from zoneinfo import ZoneInfo  # Python 3.9+
+except ImportError:
+    from backports.zoneinfo import ZoneInfo  # backports 패키지 필요
 from pathlib import Path
 
 from cryptography.hazmat.primitives import serialization
