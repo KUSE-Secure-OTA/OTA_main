@@ -4,10 +4,10 @@ req_extensions = v3_req
 prompt = no
 
 [ req_distinguished_name ]
-CN = 172.29.41.24
+CN = 10.30.94.192
 
 [ v3_req ]
 subjectAltName = @alt_names
 
 [ alt_names ]
-IP.1 = 172.29.41.24
+IP.1 = 10.30.94.192

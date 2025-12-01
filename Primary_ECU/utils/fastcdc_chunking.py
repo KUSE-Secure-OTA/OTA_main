@@ -3,6 +3,7 @@
 # 단계 배너 + 성능 지표 출력
 
 import os, sys, json, shutil, tarfile, mmap, subprocess, re, fastcdc, time, statistics, hashlib
+from pathlib import Path
 
 # --- 경로/설정 ---
 SOURCE_OCI_DIR    = 'HU_ver1'
@@ -224,6 +225,42 @@ def join_all(manifests_dir=MANIFESTS_DIR, reassembled_dir=REASSEMBLED_DIR, chunk
     dur = t1 - t0
     print(f"  재조립 파일 수: {metrics['reassembled_files']:,}")
     print(f"  재조립 바이트: {fmt_bytes(metrics['reassembled_bytes'])}")
+    print(f"  재조립 시간: {dur:.3f} s, 처리량: {fmt_thr(metrics['reassembled_bytes'], dur)}")
+    return metrics, dur
+
+def join_all_by_manifest(manifests=MANIFESTS_DIR, reassembled_dir=REASSEMBLED_DIR, chunks_dir=CHUNKS_DIR):
+    print('--- [2/6] 파일 재조립 ---')
+    metrics = {'reassembled_bytes':0, 'reassembled_files':0}
+    t0 = time.perf_counter()
+    with open(manifests, "r") as f:
+        m = json.load(f)
+
+    chunks_info = m["signed"]["chunks"]
+
+    for rel_path, chunk_ids in chunks_info.items():
+        out_path = Path(f"{reassembled_dir}/{rel_path}")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
+        print(f"[JOIN] {rel_path}  <- {len(chunk_ids)} chunks")
+
+        # 파일을 새로 만들고, chunk들을 순서대로 append
+        with out_path.open("wb") as out_f:
+            for chunk_id in chunk_ids:
+                chunk_path = Path(f"{chunks_dir}/{chunk_id}")
+
+                if not chunk_path.is_file():
+                    raise FileNotFoundError(
+                        f"Chunk file not found: {chunk_path}"
+                    )
+
+                # chunk 내용을 그대로 이어 붙임
+                with chunk_path.open("rb") as c_f:
+                    shutil.copyfileobj(c_f, out_f, length=1024 * 1024)
+
+    t1 = time.perf_counter()
+    dur = t1 - t0
+    # print(f"  재조립 파일 수: {metrics['reassembled_files']:,}")
+    # print(f"  재조립 바이트: {fmt_bytes(metrics['reassembled_bytes'])}")
     print(f"  재조립 시간: {dur:.3f} s, 처리량: {fmt_thr(metrics['reassembled_bytes'], dur)}")
     return metrics, dur
 
