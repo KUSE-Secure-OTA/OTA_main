@@ -1,29 +1,57 @@
-# OTA_main
-## Branch for Director Repository
-
-### Director
-- Director Repository
-### Image
-- Image Repositoy
-- 임시
-## Upload
-- Watchdog 구현
-- 해당 디렉터리에 업데이트 파일 업로드
-### 상위 디렉터리(Local)
-- root 메타데이터 생성
-
-## 수정 필요
-1. 코드 상에서 metadata 저장 위치, key 이름 및 참조 위치 변경 필요
-2. root 생성 시 Director, Image 다른 키 쓰도록 바꿔야 함
-
-
 # OTA System Setup & Execution Guide
 
-이 문서는 OTA Director Server와 Primary ECU 간의 OTA 업데이트 환경을
-구성하고 실행하는 절차를 정리한 가이드입니다.
+이 문서는 국민대학교 자동차융합대학 차량보안동아리 KUSE 2025-2 'Secure OTA' 프로젝트 구현 내용에 대한 설명입니다.
 
 ------------------------------------------------------------------------
 
+## OEM Server(chunking_watchdog.py)
+업데이트 할 컨테이너 이미지 압축 파일을 확인하여, FastCDC를 활용한 chunk 분할 및 manifest를 생성합니다.
+
+- `OTA_Dircector_Server/src_add/stage`: 업데이트 이미지 업로드 디렉토리
+
+### 수행절차
+1. 컨테이너 이미지 FastCDC 기반 Chunk 분할 및 저장 -> 중복 제거
+2. Global Target metadata 생성 및 OTA 서버로 배포(Image, Director)
+3. Image Repository의 chunk_storage 및 manifest 업데이트
+
+## Image Repository(Image_Repository_ver2.py)
+Chunk 저장소와 Manifest를 제공하는 역할로, 전체 이미지에 대한 메타데이터 관리
+
+- `OTA_Dircector_Server/Image_Repo/chunk_storage`: Chunk 저장소
+- `OTA_Dircector_Server/Image_Repo/meta`: metadata 및 manifest 관리
+
+### 수행절차
+1. Target 메타데이터가 수정되면, Snapshot, Timestamp 메타데이터를 순차적으로 갱신
+2. Flask 서버를 통해 `chunk_storage`와 `meta` 서비스
+3. Vehicle로부터 메타데이터 요청을 수신하면 Timestamp 및 base Url 전달(MQTT)
+4. 나머지 메타데이터 및 chunk 관련 정보는 모두 HTTPS를 통해 서비스
+
+## Director Repository(main.py)
+Vehicle의 상태 정보를 바탕으로 업데이트 정보 판단 및 생성하는 역할
+
+- `Director/meta`: metadata 및 manifest 관리
+
+### 수행절차
+1. Vehicle이 publish 한 VVM 정보를 수신
+2. Global Target metadata와 VVM 비교를 통해 업데이트 할 Target 메타데이터 생성(`target_per_vehicle.json`)
+3. 생성된 Target 메타데이터를 기반으로, Snapshot, Timestamp 메타데이터 생성
+4. 모든 메타데이터를 MQTT를 통해 publish
+
+## Primary ECU(Primary_ECU.py)
+VVM 정보를 기반으로 생성된 업데이트 정보 검증 및 다운로드
+
+- `Primary_ECU/downloads`: Image Repository로부터 다운로드 한 모든 데이터 관리
+
+### 수행절차
+1. VVM 정보를 publish
+2. 수신한 Director Repository의 모든 메타데이터 서명 검증
+3. 수신한 Image Repository의 메타데이터 순차적 서명 검증
+4. Director와 Image의 target 이미지에 대한 교차 검증
+5. Manifest 및 chunk 다운로드
+
+
+
+# 프로젝트 사용 방법
 ## 📌 1. MQTT 및 HTTP 인증서 제작 및 설정
 
 MQTT 브로커와 Flask 서버 통신을 위해 필요한 인증서를 제작하고 아래
@@ -56,29 +84,40 @@ python3 OTA_Director_Server/src/chunking_watchdog.py
 
 ------------------------------------------------------------------------
 
-## 📌 4. 컨테이너 이미지 준비 및 배포 파일 배치
-
-OTA 업데이트에 사용할 `HU_ver1.tar.xz` 파일을 아래 디렉터리에
-배치합니다.
-
--   `OTA_Director_Server/src_add/stage`
-
-이미지는 Docker Hub에서 가져와 oci-archive 형식으로 변환해 사용합니다.
-
-``` bash
-podman pull hanbin6157/seame_hu_app:1.0.0
-podman save --format oci-archive -o HU_ver1.tar.xz seame_hu_app:1.0.0
-```
-
-------------------------------------------------------------------------
-
-## 📌 5. Image Repository 실행
+## 📌 4. Image Repository 실행
 
 컨테이너 이미지 chunk 생성 및 OTA 파일 배포 기능을 수행하는 Image
 Repository를 실행합니다.
 
 ``` bash
 python3 OTA_Director_Server/src/Image_Repository.py
+```
+
+------------------------------------------------------------------------
+
+## 📌 5. 컨테이너 이미지 준비 및 배포 파일 배치
+
+OTA 업데이트에 사용할 `ivi_0.0.0.tar.xz` 파일을 아래 디렉터리에
+배치합니다.(`ecu_버전.tar.xz` 이름 형식 주의)
+
+-   `OTA_Director_Server/src_add/stage`
+- Image Repository가 파일 변화 시점을 감지해야 하므로, Image Repository가 실행되고 있어야 함
+
+이미지는 Docker Hub에서 가져와 oci-archive 형식으로 변환해 사용합니다.
+
+``` bash
+podman pull hanbin6157/seame_hu_app:1.0.0
+podman save --format oci-archive -o ivi_2.0.0.tar.xz seame_hu_app:1.0.0
+```
+
+------------------------------------------------------------------------
+
+## 📌 6. Director Repository 실행
+
+VVM 정보를 수신하고, 업데이트 정보를 생성하는 Director Repository 실행
+
+``` bash
+python3 Director/main.py
 ```
 
 ------------------------------------------------------------------------
@@ -101,46 +140,32 @@ Prime ECU 실행과 동시에 다운로드가 진행되며, Prime ECU에서 전�
 
 ------------------------------------------------------------------------
 
-## ⚠️ 디렉터리 구조 확인
+## ⚠️ 키 및 인증서 확인
+    1. 최상위 디렉터리에 `root_keys`디렉터리를 생성하고, 아래의 키가 존재해야 함
+    - root1_pub.pem
+    - root1.pem
+    - root2_pub.pem
+    - root2.pem
+    - root3_pub.pem
+    - root3.pem
+    - snapshot_pub.pem
+    - snapshot.pem
+    - targets_pub.pem
+    - targets.pem
+    - timestamp_pub.pem
+    - timestamp.pem
 
-    /Primary_ECU/download
-    /OTA_Director_Server/src_add/stage
-    /OTA_Director_Server/src_add/tmp
-    /OTA_Director_Server/Image_Repo/chunks_storage
+    2. root.py 실행하면 Image, Director Repository에 root 메타데이터 생성
+    3. 각 영역에 snapshot, targets, timestamp 키 쌍 존재해야 함
+    - OTA_Director_Server/keys
+    - Director/keys
+
+    4. OTA_Director_Server/keys 에 업데이트할 이미지에 대한 키 쌍 임의 생성
+      ex) ivi.pem, ivi_pub.pem
+
+    5. Primary_ECU/make_vvm.py 실행으로 root_vvm 및 vvm 생성 가능
+
+    6. 그 외 MQTT, HTTPS 관련 인증서 확인
 
 ------------------------------------------------------------------------
-# OTA_main : targets 형식 변경
-- OTA_Director_Server에서 새로운 형식대로 메타데이터 생성하도록 코드 수정하였습니다.
-## chunking_watchdog.py
-- ../src_add/stage에 올라가는 새로운 이미지(.tar) 감지
-- fastcdc_chunking.py의 split_all()에 넣어서 청크 분할
-- 리턴값 이용해 manifest(ex.ivi_1.0.0.json) 생성
-- manifest 첨가된 targets.json 최신화
-## fastcdc_chunking.py
-- 전달받은 .tar 형식 이미지 압축 해제 후 분할
-- manifest의 signed 부분 형식에 맞게 넣어서 리턴
-## 전체 흐름
-### 1. 이미지 업로드
-- 이미지 파일명 : {image}_x.y.z.tar (ex. ivi_1.0.0.tar)
-- ../src_add/stage에 업로드
-### 2. 이미지 청크 분할
-- 청크들은 로컬과 Image Repository에 각각 동일하게 저장.
-- 둘 다 /chunks_storage 디렉터리에 중복 제거 후 저장됨.
-### 3. 이미지에 대한 Manifest 생성
-- Manifest 파일명 : {image}_x.y.z.json (ex. ivi_1.0.0.json)
-- Image Repository와 Director Repository의 /meta/targets 디렉터리에 동일하게 저장됨.
-- 디렉터리 구조 예시
-  ```
-  targets
-  ├── cluster
-  │   └── cluster_image
-  │       └── cluster_1.0.0.json
-  └── ivi
-      └── ivi_image
-          ├── ivi_1.0.0.json
-          └── ivi_2.0.0.json
-  ```
-### 4. targets 생성
-- 파일명 : targets.json
-- 원본 이미지에 대한 정보와 각 manifest에 대한 키 정보 등이 담김.
-- Image Repository와 Director Repository의 /meta/ 디렉터리에 동일하게 저장됨.
+
