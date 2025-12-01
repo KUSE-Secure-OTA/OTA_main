@@ -454,6 +454,7 @@ class FileChangeHandler(FileSystemEventHandler):
             return
 
         image_path = event.src_path
+        # 0) tar 형식의 파일 업로드 확인하여 대상 ECU 및 버전 확인
         if not image_path.endswith(".tar"):
             print(f"[watchdog] 무시 (tar 아님): {image_path}")
             return

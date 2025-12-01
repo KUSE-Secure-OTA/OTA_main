@@ -23,14 +23,14 @@ from utils.timestamp import generate_timestamp
 
 BASE_DIR   = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 WATCH_DIR  = os.path.join(BASE_DIR, "Image_Repo/meta")          # new_chunks.tar.gz, manifests.tar.gz 위치
-CHUNKS_DIR = os.path.join(WATCH_DIR, "chunks_storage")  # 항상 서비스할 청크 디렉터리
+CHUNKS_DIR = os.path.join(WATCH_DIR, "../chunks_storage")  # 항상 서비스할 청크 디렉터리
 MANIFESTS_TAR = os.path.join(WATCH_DIR, "manifests.tar.gz")
 NEW_CHUNKS_TAR = os.path.join(WATCH_DIR, "new_chunks.tar.gz")
 
 os.makedirs(CHUNKS_DIR, exist_ok=True)
 
 class FlaskServer:
-    def __init__(self, host="192.168.35.202", port=8443,
+    def __init__(self, host="10.30.101.15", port=8443,
                  cert="./utils/certs/https_server.crt",
                  key="./utils/certs/https_server.key"):
         self.app = Flask(__name__)
@@ -64,7 +64,6 @@ class FlaskServer:
             if not os.path.exists(full_path):
                 return jsonify({"error": "manifests not ready"}), 404
             
-            # WATCH_DIR 기준으로 파일 하나만 내려줌
             return send_from_directory(
                 WATCH_DIR,
                 meta_type,
@@ -108,8 +107,6 @@ class FileHandler:
         self.event_handler = FileChangeHandler(self.client, self.WATCH_DIR, self.files_path)
         self.observer.schedule(self.event_handler, self.WATCH_DIR, recursive=False)
 
-        # self.json_handler = JsonHandler()
-
     def connect_mqtt(self):
         try:
             self.client.connect(self.MQTT_BROKER, self.MQTT_PORT, 60)
@@ -131,6 +128,7 @@ class FileHandler:
         client.subscribe(self.MQTT_REQUEST_TOPIC)
 
     def on_message(self, client, userdata, msg):
+        # Vehicle 업데이트 요청 수신
         if msg.topic == self.MQTT_REQUEST_TOPIC:
             print("[MQTT] Meta Data request received from Primary ECU")
 
@@ -141,54 +139,9 @@ class FileHandler:
             upload_url = f"https://{self.MQTT_BROKER}:8443"
             data["url"] = upload_url
             
+            # Timestamp + URL Json 데이터 전송
             self.client.publish(self.MQTT_META_TOPIC, json.dumps(data, ensure_ascii=False).encode("utf-8"), qos=2)
             print(f"[MQTT] 📡 Meta Data published metadata")
-        # try:
-        #     payload_data = json.loads(msg.payload.decode('utf-8'))
-        #     temp_json_path = "./receive_signature.json"
-        #     with open(temp_json_path, "w", encoding="utf-8") as f:
-        #         json.dump(payload_data, f, indent=2)
-
-        #     if verify_multi_signature(temp_json_path):
-        #         print("[MQTT] ✅ Multi-signature verification passed")
-
-        #         if msg.topic == self.MQTT_REQUEST_TOPIC:
-        #             print("[MQTT] Meta Data request received from Primary ECU")
-
-        #             target_path = "./data/target_image.json"
-        #             # 추후 동일한 경로/파일명으로 맞춰야 함
-                    
-        #             if not os.path.exists(target_path):
-        #                 print("[Error] target_image.json not found")
-        #                 return
-
-        #             with open(target_path, "r", encoding="utf-8") as f:
-        #                 data = json.load(f)
-
-        #             upload_url = f"https://{self.MQTT_BROKER}:8443/upload"
-        #             with open(self.files_path, 'rb') as f:
-        #                 files = {'file': ('update_image.tar.xz', f)}
-        #                 res = requests.post(upload_url, files=files, verify="./utils/certs/https_server.crt")
-                    
-        #             if res.status_code != 200:
-        #                 print(f"[Error] File upload failed (HTTP {res.status_code})")
-        #                 return
-
-        #             download_url = res.json().get('url')
-        #             if not download_url:
-        #                 print("[Error] No URL in server response")
-        #                 return
-
-        #             data["url"] = download_url
-        #             meta_payload = make_payload_with_signatures(data)
-        #             client.publish(self.MQTT_META_TOPIC, meta_payload, qos=2)
-        #             print(f"[MQTT] 📡 Upload complete, download URL: {download_url}")
-
-        #     else:
-        #         print("[MQTT] ❌ Multi-signature verification failed")
-
-        # except Exception as e:
-        #     print(f"[Error] Exception in on_message: {e}")
 
 
 class FileChangeHandler(FileSystemEventHandler):
@@ -199,15 +152,18 @@ class FileChangeHandler(FileSystemEventHandler):
         # self.json_handler = JsonHandler()
         self.signing_key_path = "./utils/signature/image_private.pem"
 
+    # targets.json 변경 감지
     def on_modified(self, event):
         fname = os.path.basename(event.src_path)
         
+        # 변경된 target 메타데이터에 대한 snapshot, timestamp 메타데이터 갱신
         if fname == "targets.json":
             s_path = generate_snapshot()
             print(f"[Image] Update a new snapshot metadata: {s_path}\n")
             ts_path = generate_timestamp()
             print(f"[Image] Update a new timestamp metadata: {ts_path}\n")
     
+    # targets.json 생성 감지(처음 생성할 경우) -> 현재 사용 X
     def on_created(self, event):
         if event.is_directory:
             TARGET_PATH = "../data/target_new.json"
@@ -278,30 +234,30 @@ def configure_tls(client, ca_cert, client_cert, client_key):
     )
     client.tls_insecure_set(False)
 
-def process_new_chunks_periodically(interval_sec=5):
-    """
-    WATCH_DIR 안의 new_chunks.tar.gz를 주기적으로 확인.
-    - 있으면 CHUNKS_DIR에 풀고, new_chunks.tar.gz 삭제
-    - manifests.tar.gz는 외부에서 이미 새걸로 덮어쓴다고 가정
-      (우리는 그냥 있는 그대로 /manifests 로 서비스)
-    """
-    while True:
-        try:
-            if os.path.exists(NEW_CHUNKS_TAR):
-                print(f"[Repo] 🔔 new_chunks.tar.gz detected: {NEW_CHUNKS_TAR}")
-                with tarfile.open(NEW_CHUNKS_TAR, "r:gz") as tar:
-                    tar.extractall(CHUNKS_DIR)
-                os.remove(NEW_CHUNKS_TAR)
-                print(f"[Repo] ✅ new_chunks.tar.gz extracted into chunks_storage and removed")
+# def process_new_chunks_periodically(interval_sec=5):
+#     """
+#     WATCH_DIR 안의 new_chunks.tar.gz를 주기적으로 확인.
+#     - 있으면 CHUNKS_DIR에 풀고, new_chunks.tar.gz 삭제
+#     - manifests.tar.gz는 외부에서 이미 새걸로 덮어쓴다고 가정
+#       (우리는 그냥 있는 그대로 /manifests 로 서비스)
+#     """
+#     while True:
+#         try:
+#             if os.path.exists(NEW_CHUNKS_TAR):
+#                 print(f"[Repo] 🔔 new_chunks.tar.gz detected: {NEW_CHUNKS_TAR}")
+#                 with tarfile.open(NEW_CHUNKS_TAR, "r:gz") as tar:
+#                     tar.extractall(CHUNKS_DIR)
+#                 os.remove(NEW_CHUNKS_TAR)
+#                 print(f"[Repo] ✅ new_chunks.tar.gz extracted into chunks_storage and removed")
 
-                # manifests.tar.gz는 처음엔 없을 수도 있음
-                if os.path.exists(MANIFESTS_TAR):
-                    print(f"[Repo] ℹ️ manifests.tar.gz present (will be served by /manifests)")
-                else:
-                    print(f"[Repo] ⚠️ manifests.tar.gz not found yet")
-        except Exception as e:
-            print(f"[Repo] ❌ Error while processing new_chunks.tar.gz: {e}")
-        time.sleep(interval_sec)
+#                 # manifests.tar.gz는 처음엔 없을 수도 있음
+#                 if os.path.exists(MANIFESTS_TAR):
+#                     print(f"[Repo] ℹ️ manifests.tar.gz present (will be served by /manifests)")
+#                 else:
+#                     print(f"[Repo] ⚠️ manifests.tar.gz not found yet")
+#         except Exception as e:
+#             print(f"[Repo] ❌ Error while processing new_chunks.tar.gz: {e}")
+#         time.sleep(interval_sec)
 
 
 
@@ -310,14 +266,14 @@ if __name__ == "__main__":
     flask_server.run()
     print("[Image] Flask repository server started")
 
-    threading.Thread(
-        target=process_new_chunks_periodically,
-        kwargs={"interval_sec": 5},
-        daemon=True,
-    ).start()
+    # threading.Thread(
+    #     target=process_new_chunks_periodically,
+    #     kwargs={"interval_sec": 5},
+    #     daemon=True,
+    # ).start()
     print("[Main] new_chunks watcher started")
 
-    MQTT_BROKER = "192.168.35.202"
+    MQTT_BROKER = "10.30.101.15"
     MQTT_PORT = 8883
     WATCH_DIR = "../Image_Repo/meta"
     files_path = "./data/update_image.tar.xz"
