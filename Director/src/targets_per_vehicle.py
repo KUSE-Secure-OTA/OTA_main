@@ -66,7 +66,7 @@ def _load_targets_keyid_from_root(root_path: Path = ROOT_JSON_PATH) -> str:
     return keyids[0]
 
 def _write_targets_json(doc: Dict[str, Any]) -> Path:
-    out = DIRECTOR_METADATA_DIR / "targets_per_vehicle.json"
+    out = Path(DIRECTOR_METADATA_DIR / "targets_per_vehicle.json")
     out.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
     return out
 
@@ -313,7 +313,7 @@ def make_targets_for_car(vvm_raw: Dict[str, Any], global_targets: Dict[str, Any]
     now = datetime.now(timezone.utc)
     expires_str = (now + timedelta(days=TARGETS_EXPIRES_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
     version = 1  # 필요하면 파일 탐색해서 증가시키는 로직 추가 가능
-
+    
     final_signed = {
         "_type": "targets",
         "version": version,
