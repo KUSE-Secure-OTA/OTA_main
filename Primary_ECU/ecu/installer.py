@@ -2,9 +2,10 @@ from dataclasses import dataclass
 from typing import Optional, Union, Dict, Any, List
 from urllib.parse import urljoin
 from pathlib import Path
-import os, shutil, json
+import os, shutil, json, subprocess
 import requests
-from utils.fastcdc_chunking import join_all_by_manifest, load_image_from_oci, run_container
+from utils.fastcdc_chunking import join_all_by_manifest
+from utils.fastcdc_chunking import run_container
 
 from .storage import Storage
 
@@ -24,9 +25,52 @@ class Installer:
     def build_image_chunk_url(self, base_url, chunk_name):
         return f"{base_url}/chunks/{chunk_name}"
 
-    # Chunk 다운로드 및 재조립
-    def download_chunk(self, update_images:List, base_url:str):
 
+    # OCI-DIR → OCI-TAR 변환 함수
+    def convert_oci_dir_to_tar(self, oci_dir: str, out_tar: str):
+        
+        # 먼저 import (oci-dir → temp image)
+        temp_tag = "local/tmp_ivi:latest"
+        subprocess.run(
+            ["podman", "image", "import", oci_dir, "--tag", temp_tag],
+            check=True
+        )
+
+        # temp image → oci archive (.tar)
+        subprocess.run(
+            ["podman", "image", "save", "--format", "oci-archive", "-o", out_tar, temp_tag],
+            check=True
+        )
+
+    # SBOM Static Verification 실행 함수
+    def run_static_verification(self, archive_path: str):
+        
+        env = os.environ.copy()
+        env["ARCHIVE"] = archive_path   # shell pipeline에서 사용할 환경 변수
+
+        # static/run_all.sh 경로 자동 설정
+        static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+        runall = os.path.join(static_dir, "run_all.sh")
+
+        print(f"[Primary ECU] Static Verification Start  ->  {archive_path}")
+        
+        result = subprocess.run(
+            [runall],
+            env=env,
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode != 0:
+            print(result.stdout)
+            print(result.stderr)
+            raise RuntimeError("Static verification FAILED for: " + archive_path)
+
+        print("[Primary ECU] Static Verification PASSED")
+
+    # Chunk 다운로드 및 재조립
+    def download_chunk(self, update_images: List, base_url: str):
+        
         for t in update_images:
             chunk_list = t["images"]["required_chunks"]
 
@@ -49,15 +93,30 @@ class Installer:
             # 재조립
             image_name = t["images"]["image_name"]
             manifest_path = f"./downloads/{image_name}.json"
-            reassembled_path = f"./downloads/{image_name}"
-            metrics, t = join_all_by_manifest(manifest_path, reassembled_path, "./downloads/chunk_storage")
-            print(f"[Primary ECU] Reassemble:   {reassembled_path}")
-            load_image_from_oci(reassembled_path)
+            oci_dir = f"./downloads/{image_name}"
+
+            metrics, tt = join_all_by_manifest(
+                manifest_path, 
+                oci_dir, 
+                "./downloads/chunk_storage"
+            )
+            print(f"[Primary ECU] Reassembled (OCI-DIR): {oci_dir}")
+
+            # OCI DIR → OCI TAR 변환
+            archive_path = f"./downloads/{image_name}.tar"
+            self.convert_oci_dir_to_tar(oci_dir, archive_path)
+            print(f"[Primary ECU] Normalized OCI-Archive: {archive_path}")
+
+            # Static Verification
+            self.run_static_verification(archive_path)
+
+            # static PASS → 실제 컨테이너 load + run
+            subprocess.run(["podman", "load", "-i", archive_path], check=True)
             run_container()
 
     # Manifest 다운로드 -> 컨테이너 재조립을 위한 chunk 목록
     def download_manifest(self, update_images:List, base_url:str):
-
+        
         for t in update_images:
             ecu = t["ecu"]
             image_name = t["images"]["image_name"]
