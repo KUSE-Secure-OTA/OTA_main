@@ -37,6 +37,7 @@ def read_root(metadata: str) -> dict:
         "keys":  keys_db,
         "roles": roles_db,
     }
+
     return keydb
 
 def _load_public_key_from_entry(entry: dict):
@@ -70,6 +71,8 @@ def verify_multi_signature(metadata: dict, keydb: dict) -> None:
 
     role = signed.get("_type")
     roles_db = keydb.get("roles", {})
+
+    # print(f"Roles in key DB:        {roles_db}")
     if role not in roles_db:
         raise ValueError(f"role '{role}' not found in keydb")
 
@@ -77,6 +80,8 @@ def verify_multi_signature(metadata: dict, keydb: dict) -> None:
     threshold = role_cfg["threshold"]
     allowed_keyids = set(role_cfg["keyids"])
 
+    # print(f"\n\n [{role}]   threshold:  {threshold}")
+    # print(f"\n\n [{role}]   allowed_key:  {allowed_keyids}")
     # canonical JSON 직렬화
     signed_bytes = json.dumps(
         signed,
@@ -90,6 +95,8 @@ def verify_multi_signature(metadata: dict, keydb: dict) -> None:
         keyid = sig_info.get("keyid")
         sig_hex = sig_info.get("sig")
 
+        # print(f"{role} can verify with:     {keyid}")
+
         # 이 role에서 허용한 key가 아니면 스킵
         if keyid not in allowed_keyids:
             continue
@@ -99,6 +106,7 @@ def verify_multi_signature(metadata: dict, keydb: dict) -> None:
             # root에는 있는데 keydb에 없으면 설정 오류
             continue
 
+        # print(f"\n{role} has a key entry:     {key_entry}")
         pub, keytype = _load_public_key_from_entry(key_entry)
 
         try:

@@ -23,6 +23,7 @@ def _load_global_targets_fixed() -> dict:
     return _load_json(p) if p.exists() else {}
 
 def main():
+    # MQTT 버스 형식
     bus = MQTTBus()
     bus.connect_and_loop()
     log.info("Director service started. Waiting for VVM...")
