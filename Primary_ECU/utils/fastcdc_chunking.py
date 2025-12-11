@@ -362,6 +362,14 @@ def load_image_from_oci(reassembled_dir=REASSEMBLED_DIR):
     print(f"  load 시간: {dur:.3f} s")
     return dur
 
+def load_image_from_tar(tar_path):
+    t0 = time.perf_counter()
+    subprocess.run(['podman','load','--input', tar_path], check=True)
+    t1 = time.perf_counter()
+    dur = t1 - t0
+    print(f"  load 시간: {dur:.3f} s")
+    return dur
+
 # ------------------------- 6) 스모크 테스트 -------------------------
 def run_container():
     print('--- [6/6] 컨테이너 실행 ---')

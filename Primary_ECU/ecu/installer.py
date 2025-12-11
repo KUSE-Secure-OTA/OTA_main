@@ -5,6 +5,7 @@ from pathlib import Path
 import os, shutil, json, subprocess
 import requests
 from utils.fastcdc_chunking import join_all_by_manifest
+from utils.fastcdc_chunking import load_image_from_tar
 from utils.fastcdc_chunking import run_container
 
 from .storage import Storage
@@ -133,8 +134,27 @@ class Installer:
             save_path = Path(f"./downloads/{image_name}.json")
             save_path.write_text(json.dumps(image_meta, indent=2, ensure_ascii=False), encoding="utf-8")
 
+    def download_image(self, update_images:List, base_url:str):
+        for image in update_images:
+            image_name = image["images"]["image_name"]
+            image_path = f"{base_url}/images/{image_name}.tar"
+            out_path = f"./downloads/image_storage/{image_name}.tar"
 
+            print(f"[Primary ECU] GET:      {image_path}")
 
+            try:
+                with requests.get(image_path, stream=True, verify=False) as response:
+                    response.raise_for_status()
+                    with open(out_path, "wb") as f:
+                        for image in response.iter_content(chunk_size=8192):
+                            if image:
+                                f.write(image)
+                print(f"[OK] saved image -> {out_path}")
+            except Exception as e:
+                print(f"[FAIL] failed to download chunk {image_name} from {image_path}: {e}")
+
+        load_image_from_tar(out_path)
+        run_container()
 
     def install(self, image_path: str, version: str) -> InstallResult:
         try:
