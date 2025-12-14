@@ -336,3 +336,83 @@ def make_targets_for_car(vvm_raw: Dict[str, Any], global_targets: Dict[str, Any]
         "signed": final_signed,
     }
     return _write_targets_json(final_doc)
+
+def make_uptane_targets_for_car(vvm_raw: Dict[str, Any], global_targets: Dict[str, Any]) -> Path:
+    """
+    - vvm: prime ECU 가 보낸 vehicle_version_manifest
+    - global_targets: Image repo 가 발행한 최상위 targets_delegation.json
+
+    동작:
+      1) VVM에서 ECU별 현재 이미지 (name, version) 추출
+      2) global_targets 에서 같은 name 에 대한 최신 버전 찾기
+      3) 최신 버전 > 현재 버전이면 업데이트 대상
+         - required_chunks = 최신 vs 현재 manifest 청크 차집합
+      4) 결과를 targets_per_vehicle.json 포맷으로 출력/서명
+    """
+    installed_list = extract_installed_list_from_vvm(vvm_raw)
+    latest_map = build_latest_map_from_global(global_targets)
+
+    per_ecu_entries: List[Dict[str, Any]] = []
+    any_update = False
+
+    for installed in installed_list:
+        ecu_id     = installed["ecu"]
+        cur_img_id = installed["image_id"]
+        img_name   = installed["name"]
+        cur_ver    = installed["version"]
+        # cur_info = installed["image_info"]  # 필요하면 사용
+
+        latest = latest_map.get(img_name)
+        if not latest:
+            # 이 ECU의 이미지 name 에 대해 global targets 에 정보가 없으면 스킵
+            continue
+
+        best_img_id, best_ver, best_info = latest
+
+        # 버전 비교만 사용 (해시 비교는 요구사항대로 제외)
+        try:
+            need_update = version_gt(best_ver, cur_ver)
+        except Exception:
+            # 버전 파싱 실패하면 그냥 스킵하는 쪽으로
+            continue
+
+        if not need_update:
+            continue
+
+        any_update = True
+
+        per_ecu_entries.append({
+            "ecu": ecu_id,
+            "images": {
+                "image_name": best_img_id,
+                "image_info": best_info
+            }
+        })
+
+    # 만료 시간 / 버전은 간단하게 고정 전략 사용
+    now = datetime.now(timezone.utc)
+    expires_str = (now + timedelta(days=TARGETS_EXPIRES_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    version = 1  # 필요하면 파일 탐색해서 증가시키는 로직 추가 가능
+    
+    final_signed = {
+        "_type": "targets",
+        "version": version,
+        "expires": expires_str,
+        "targets": per_ecu_entries,
+        "update": bool(any_update),
+    }
+
+    # 서명
+    sign_key_path = DIRECTOR_KEYS_DIR / "targets.pem"
+    if not sign_key_path.exists():
+        raise FileNotFoundError(f"Director signing key not found: {sign_key_path}")
+
+    msg = canonical_json_bytes(final_signed)
+    sig_hex = _sign_ed25519_pem(msg, str(sign_key_path))
+    targets_keyid = _load_targets_keyid_from_root()
+
+    final_doc = {
+        "signatures": [{"keyid": targets_keyid, "sig": sig_hex}],
+        "signed": final_signed,
+    }
+    return _write_targets_json(final_doc)

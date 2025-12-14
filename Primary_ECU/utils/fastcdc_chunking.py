@@ -371,7 +371,7 @@ def load_image_from_tar(tar_path):
     return dur
 
 # ------------------------- 6) 스모크 테스트 -------------------------
-def run_container():
+def run_container(ver):
     print('--- [6/6] 컨테이너 실행 ---')
     cmd = [
         'podman', 'run', '--rm',
@@ -384,7 +384,7 @@ def run_container():
         '-e', f'DISPLAY={os.environ.get("DISPLAY", "")}',
         '-v', '/tmp/.X11-unix:/tmp/.X11-unix:rw',
         '--device', '/dev/dri',
-        IMAGE_NAME,
+        f"{IMAGE_NAME}:{ver}",
     ]
     print(f"> 실행: podman run --rm {IMAGE_NAME}")
     subprocess.run(cmd, check=True)
