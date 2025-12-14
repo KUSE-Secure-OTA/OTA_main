@@ -4,6 +4,7 @@ import paho.mqtt.client as mqtt
 import requests
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urljoin
+from utils.fastcdc_chunking import run_container
 from utils.fastcdc_chunking import join_all, load_image_from_oci, run_container
 
 try:
@@ -23,7 +24,7 @@ from ecu import (
     Reporter,
 )
 
-BROKER = "10.30.101.15"
+BROKER = "192.168.35.202"
 PORT = 8883
 
 TOPIC_NOTIFY_VERSION     = "primary/version"     # VVM 전송
@@ -147,10 +148,26 @@ class PrimeEcuHandler:
                 print("[FAIL] Hash Check is failed")
                 
             else:
-                print("[Primary ECU] Download a new chunks")
+                print("[Primary ECU] Download a new chunk-based image")
                 # 업데이트 이미지 재조립을 위한 manifest 및 chunk 다운로드
-                self.installer.download_manifest(update_images, base_url)
-                self.installer.download_chunk(update_images, base_url)
+                layer_list = self.installer.download_manifest(update_images, base_url)
+                if len(layer_list) != 0 :
+                    print("[Primary ECU] Manifest check is OK.\n")
+                    vvm_version = self.installer.download_chunk(update_images, base_url)
+
+                    self.installer.update_info(layer_list, vvm_version)
+                    print("[Primary ECU] Success to update documents.\n")
+
+                    ivi_name = vvm_version[0]["target_image"]["filename"]
+                    version = ivi_name.split('_')[1].rsplit('.', 1)[0]
+                    major, minor, patch = map(int, version.split('.'))
+                    major -= 1
+                    version = f"{major}.{minor}.{patch}"
+                    run_container(version)
+                    # Static Verification
+
+                else:
+                    print("[FAIL] This image is not new one.\n")
 
             return
 

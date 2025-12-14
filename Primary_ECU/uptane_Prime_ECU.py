@@ -23,7 +23,7 @@ from ecu import (
     Reporter,
 )
 
-BROKER = "10.222.90.212"
+BROKER = "192.168.35.202"
 PORT = 8883
 
 TOPIC_NOTIFY_VERSION     = "primary/version"     # VVM 전송

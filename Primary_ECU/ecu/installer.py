@@ -1,12 +1,15 @@
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Union, Dict, Any, List
 from urllib.parse import urljoin
 from pathlib import Path
 import os, shutil, json, subprocess
 import requests
 from utils.fastcdc_chunking import join_all_by_manifest
+from utils.fastcdc_chunking import load_image_from_oci
 from utils.fastcdc_chunking import load_image_from_tar
 from utils.fastcdc_chunking import run_container
+from make_vvm import load_or_create_ed25519_private_key, calc_ed25519_keyid_from_public_key, sign_block_ed25519
 
 from .storage import Storage
 
@@ -104,9 +107,28 @@ class Installer:
             print(f"[Primary ECU] Reassembled (OCI-DIR): {oci_dir}")
 
             # OCI DIR → OCI TAR 변환
+            
             archive_path = f"./downloads/{image_name}.tar"
-            self.convert_oci_dir_to_tar(oci_dir, archive_path)
-            print(f"[Primary ECU] Normalized OCI-Archive: {archive_path}")
+            load_image_from_oci(oci_dir)
+            # self.convert_oci_dir_to_tar(oci_dir, archive_path)
+            # print(f"[Primary ECU] Normalized OCI-Archive: {archive_path}")
+
+            # VVM Update
+            with open("vvm.json", "r", encoding="utf-8") as f:
+                vvm = json.load(f)
+
+            for ecu in vvm["signed"]["ecu_version"]:
+                if ecu.get("ecu_serial") == t["ecu"]:
+                    ecu["target_image"]["filename"] = f"{image_name}.tar"
+                    ecu["target_image"]["fileinfo"]["hashes"]["sha256"] = t["images"]["image_info"]["hashes"]["sha256"]
+                    ecu["target_image"]["fileinfo"]["hashes"]["sha512"] = t["images"]["image_info"]["hashes"]["sha512"]
+                    break
+            
+            return vvm["signed"]["ecu_version"]
+            
+            with open("vvm.json", "w", encoding="utf-8") as f:
+                json.dump(vvm, f, indent=2)
+            print("[Primary ECU] Update VVM infomation\n")
 
             # Static Verification
             self.run_static_verification(archive_path)
@@ -134,6 +156,36 @@ class Installer:
             save_path = Path(f"./downloads/{image_name}.json")
             save_path.write_text(json.dumps(image_meta, indent=2, ensure_ascii=False), encoding="utf-8")
 
+            # 이미지 재활용 여부 확인
+            installed_list_path = "./meta/installed_layers.json"
+            if not os.path.exists(installed_list_path):
+                installed = {"layers": []}
+            else:
+                with open(installed_list_path, 'r') as f:
+                    installed = json.load(f)
+
+            installed_hashes = set(installed.get("layers", []))
+
+            chunks = image_meta["signed"]["chunks"]
+
+            target_hashes = set()
+            for key in chunks.keys():
+                if key.startswith("blobs/sha256/"):
+                    sha = key.split("blobs/sha256/")[1]
+                    target_hashes.add(sha)
+
+            new_layers = [h for h in target_hashes if h not in installed_hashes]
+
+            if new_layers:
+                installed_hashes.update(new_layers)
+
+                # with open(installed_list_path, 'w') as f:
+                #     json.dump({"layers": list(installed_hashes)}, f, indent=2)
+
+                return list(installed_hashes)
+            
+            return []
+
     def download_image(self, update_images:List, base_url:str):
         for image in update_images:
             image_name = image["images"]["image_name"]
@@ -154,8 +206,63 @@ class Installer:
                 print(f"[FAIL] failed to download chunk {image_name} from {image_path}: {e}")
 
         load_image_from_tar(out_path)
-        run_container()
+        version = image_name.split('_')[1]
+        major, minor, patch = map(int, version.split('.'))
+        if major == 3:
+            major = 0
+        else:
+            major -= 1
+        version = f"{major}.{minor}.{patch}"
+        run_container(version)
 
+    def update_info(self, layer_list, vvm_version):
+        # 설치된 레이어 리스트 업데이트
+        with open("./meta/installed_layers.json", 'w') as f:
+            json.dump({"layers": layer_list}, f, indent=2)
+
+        # VVM 업데이트
+        ED25519_PRIVATE_KEY_PATH = Path("ed25519_private_key.pem")
+        vin = "VIN-TEST-0001"
+        primary_ecu_serial = "primary0"
+        ed_private_key = load_or_create_ed25519_private_key(ED25519_PRIVATE_KEY_PATH)
+
+        vvm_keyid = calc_ed25519_keyid_from_public_key(ed_private_key)
+
+        now = datetime.now(timezone.utc)
+        expires_str = (
+            now + timedelta(days=365)
+        ).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        signed = {
+            "vin": vin,
+            "primary_ecu_serial": primary_ecu_serial,
+            "expires": expires_str,
+            "ecu_version": vvm_version
+        }
+
+        signed["keyid"] = vvm_keyid
+        sig = sign_block_ed25519(ed_private_key, signed)
+
+        vvm_obj = {
+            "signatures": [
+                {
+                    "keyid": vvm_keyid,
+                    "sig": sig,
+                }
+            ],
+            "signed": signed,
+        }
+
+        VVM_JSON_PATH = Path("vvm.json")
+
+        VVM_JSON_PATH.write_text(
+            json.dumps(vvm_obj, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        print(f"vvm.json 업데이트 완료: {VVM_JSON_PATH}")
+
+
+    
     def install(self, image_path: str, version: str) -> InstallResult:
         try:
             staging = self.storage.staging_dir(version)
