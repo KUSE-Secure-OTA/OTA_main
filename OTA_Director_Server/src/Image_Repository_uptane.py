@@ -28,7 +28,7 @@ IMAGE_DIR = os.path.join(WATCH_DIR, "../image_storage")  # 항상 서비스할 �
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
 class FlaskServer:
-    def __init__(self, host="10.222.90.212", port=8443,
+    def __init__(self, host="192.168.35.202", port=8443,
                  cert="./utils/certs/https_server.crt",
                  key="./utils/certs/https_server.key"):
         self.app = Flask(__name__)
@@ -245,7 +245,7 @@ if __name__ == "__main__":
     # ).start()
     print("[Main] new_chunks watcher started")
 
-    MQTT_BROKER = "10.222.90.212"
+    MQTT_BROKER = "192.168.35.202"
     MQTT_PORT = 8883
     WATCH_DIR = "../Image_Repo/meta"
     files_path = "./data/update_image.tar.xz"
