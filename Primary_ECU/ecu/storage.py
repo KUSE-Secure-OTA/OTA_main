@@ -6,6 +6,9 @@ class Storage:
         # 개발/WSL에선 사용자 홈 밑에 두는 게 권한 문제 적음
         self.base = base or os.path.expanduser("~/.primary_ecu")
         os.makedirs(self.base, exist_ok=True)
+        os.makedirs("./downloads/chunk_storage", exist_ok=True)
+        os.makedirs("./downloads/image_storage", exist_ok=True)
+
         self._state = os.path.join(self.base, "state.json")
         self._ver = os.path.join(self.base, "version.json")
 

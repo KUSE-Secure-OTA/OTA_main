@@ -7,7 +7,7 @@ ROOT_DIR      = '../src_add'
 CHUNKS_DIR    = os.path.join(ROOT_DIR, 'chunks_storage')
 
 # FastCDC 파라미터
-AVG = 64 * 1024
+AVG = 256 * 1024
 MIN = AVG // 2
 MAX = AVG * 2
 
