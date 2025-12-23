@@ -1,15 +1,11 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-IMAGE="localhost/seame_hu_app:1.0.0"
-ARCHIVE="artifacts/seame_hu_app.tar"
-OUTPUT="artifacts/sbom.json"
+ARCHIVE_PATH="$1"
+if [[ ! -f "$ARCHIVE_PATH" ]]; then
+  echo "[!] Archive not found: $ARCHIVE_PATH"
+  exit 1
+fi
 
-echo "[+] Saving image to tar archive..."
-podman save -o "$ARCHIVE" "$IMAGE"
-
-echo "[+] Generating SBOM from archive..."
-trivy image --input "$ARCHIVE" \
-    --format cyclonedx --output "$OUTPUT"
-
-echo "[✓] SBOM saved → $OUTPUT"
+# stdout으로 CycloneDX JSON 출력
+trivy image --input "$ARCHIVE_PATH" --format cyclonedx

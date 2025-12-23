@@ -1,11 +1,10 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-ARCHIVE="artifacts/seame_hu_app.tar"
-OUTPUT="artifacts/license.log"
+ARCHIVE_PATH="$1"
+if [[ ! -f "$ARCHIVE_PATH" ]]; then
+  echo "[!] Archive not found: $ARCHIVE_PATH"
+  exit 1
+fi
 
-echo "[+] Running license scan on tar archive..."
-trivy image --input "$ARCHIVE" --scanners license \
-    > "$OUTPUT"
-
-echo "[✓] License scan complete → $OUTPUT"
+trivy image --input "$ARCHIVE_PATH" --scanners license
