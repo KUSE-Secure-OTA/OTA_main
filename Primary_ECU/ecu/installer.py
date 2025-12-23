@@ -30,23 +30,14 @@ class Installer:
         return f"{base_url}/chunks/{chunk_name}"
 
 
-    # OCI-DIR → OCI-TAR 변환 함수
+    # OCI DIR를 tar로 묶어 변환
     def convert_oci_dir_to_tar(self, oci_dir: str, out_tar: str):
-        
-        # 먼저 import (oci-dir → temp image)
-        temp_tag = "local/tmp_ivi:latest"
         subprocess.run(
-            ["podman", "image", "import", oci_dir, "--tag", temp_tag],
+            ["tar", "-C", oci_dir, "-cf", out_tar, "."],
             check=True
         )
 
-        # temp image → oci archive (.tar)
-        subprocess.run(
-            ["podman", "image", "save", "--format", "oci-archive", "-o", out_tar, temp_tag],
-            check=True
-        )
-
-    # SBOM Static Verification 실행 함수
+    # Static verification pipeline 실행
     def run_static_verification(self, archive_path: str):
         
         env = os.environ.copy()
@@ -59,7 +50,7 @@ class Installer:
         print(f"[Primary ECU] Static Verification Start  ->  {archive_path}")
         
         result = subprocess.run(
-            [runall],
+            ["bash", runall, archive_path],
             env=env,
             capture_output=True,
             text=True
@@ -74,7 +65,8 @@ class Installer:
 
     # Chunk 다운로드 및 재조립
     def download_chunk(self, update_images: List, base_url: str):
-        
+
+        updated_ecu_versions = []
         for t in update_images:
             chunk_list = t["images"]["required_chunks"]
 
@@ -91,6 +83,7 @@ class Installer:
                                 if chunk:
                                     f.write(chunk)
                     print(f"[OK] saved chunk -> {out_path}")
+                
                 except Exception as e:
                     print(f"[FAIL] failed to download chunk {c} from {url}: {e}")
 
@@ -100,18 +93,16 @@ class Installer:
             oci_dir = f"./downloads/{image_name}"
 
             metrics, tt = join_all_by_manifest(
-                manifest_path, 
-                oci_dir, 
+                manifest_path,
+                oci_dir,
                 "./downloads/chunk_storage"
             )
             print(f"[Primary ECU] Reassembled (OCI-DIR): {oci_dir}")
 
-            # OCI DIR → OCI TAR 변환
-            
+            # OCI DIR → OCI TAR 변환 (정적 검증 입력)
             archive_path = f"./downloads/{image_name}.tar"
-            load_image_from_oci(oci_dir)
-            # self.convert_oci_dir_to_tar(oci_dir, archive_path)
-            # print(f"[Primary ECU] Normalized OCI-Archive: {archive_path}")
+            self.convert_oci_dir_to_tar(oci_dir, archive_path)
+            print(f"[Primary ECU] Packed OCI layout into archive: {archive_path}")
 
             # VVM Update
             with open("vvm.json", "r", encoding="utf-8") as f:
@@ -120,22 +111,26 @@ class Installer:
             for ecu in vvm["signed"]["ecu_version"]:
                 if ecu.get("ecu_serial") == t["ecu"]:
                     ecu["target_image"]["filename"] = f"{image_name}.tar"
-                    ecu["target_image"]["fileinfo"]["hashes"]["sha256"] = t["images"]["image_info"]["hashes"]["sha256"]
-                    ecu["target_image"]["fileinfo"]["hashes"]["sha512"] = t["images"]["image_info"]["hashes"]["sha512"]
+                    ecu["target_image"]["fileinfo"]["hashes"]["sha256"] = \
+                        t["images"]["image_info"]["hashes"]["sha256"]
+                    ecu["target_image"]["fileinfo"]["hashes"]["sha512"] = \
+                        t["images"]["image_info"]["hashes"]["sha512"]
+                    updated_ecu_versions.append(ecu)
                     break
-            
-            return vvm["signed"]["ecu_version"]
-            
-            with open("vvm.json", "w", encoding="utf-8") as f:
-                json.dump(vvm, f, indent=2)
-            print("[Primary ECU] Update VVM infomation\n")
 
             # Static Verification
-            self.run_static_verification(archive_path)
+            self.run_static_verification(str(Path(archive_path).resolve()))
 
-            # static PASS → 실제 컨테이너 load + run
-            subprocess.run(["podman", "load", "-i", archive_path], check=True)
-            run_container()
+            # 정적 통과 후, VVM 저장 
+            with open("vvm.json", "w", encoding="utf-8") as f:
+                json.dump(vvm, f, indent=2)
+            print("[Primary ECU] Update VVM information")
+
+            # 동적 실행
+            # subprocess.run(["podman", "load", "-i", archive_path], check=True)
+            # run_container()
+
+        return updated_ecu_versions
 
     # Manifest 다운로드 -> 컨테이너 재조립을 위한 chunk 목록
     def download_manifest(self, update_images:List, base_url:str):
