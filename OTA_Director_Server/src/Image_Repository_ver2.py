@@ -30,7 +30,7 @@ NEW_CHUNKS_TAR = os.path.join(WATCH_DIR, "new_chunks.tar.gz")
 os.makedirs(CHUNKS_DIR, exist_ok=True)
 
 class FlaskServer:
-    def __init__(self, host="192.168.35.202", port=8443,
+    def __init__(self, host="10.213.196.125", port=8443,
                  cert="./utils/certs/https_server.crt",
                  key="./utils/certs/https_server.key"):
         self.app = Flask(__name__)
@@ -143,86 +143,115 @@ class FileHandler:
             self.client.publish(self.MQTT_META_TOPIC, json.dumps(data, ensure_ascii=False).encode("utf-8"), qos=2)
             print(f"[MQTT] 📡 Meta Data published metadata")
 
+def wait_until_file_stable(path: str, interval_sec: float = 0.5, stable_rounds: int = 3, timeout_sec: float = 30.0) -> bool:
+    start = time.time()
+    last_size = None
+    last_mtime = None
+    stable = 0
+
+    while True:
+        if not os.path.exists(path):
+            stable = 0
+        else:
+            try:
+                st = os.stat(path)
+                cur_size = st.st_size
+                cur_mtime = st.st_mtime
+
+                if cur_size == last_size and cur_mtime == last_mtime and cur_size > 0:
+                    stable += 1
+                else:
+                    stable = 0
+
+                last_size = cur_size
+                last_mtime = cur_mtime
+
+                if stable >= stable_rounds:
+                    return True
+            except OSError:
+                stable = 0
+
+        if (time.time() - start) >= timeout_sec:
+            return False
+        
+        time.sleep(interval_sec)
 
 class FileChangeHandler(FileSystemEventHandler):
     def __init__(self, client, watch_dir, files_path):
         self.client = client
         self.watch_dir = watch_dir
         self.files_path = files_path
-        # self.json_handler = JsonHandler()
         self.signing_key_path = "./utils/signature/image_private.pem"
 
+        self._debounce_lock = threading.Lock()
+        self._debounce_timer = None
+        self._targets_name = "targets.json"
+
+    def _schedule_targets_refresh(self, targets_path: str, delay_sec: float = 0.8):
+        """
+        targets.json 이벤트가 연속으로 발생해도 delay_sec 이후 1회만 처리.
+        """
+        with self._debounce_lock:
+            if self._debounce_timer is not None:
+                self._debounce_timer.cancel()
+
+            self._debounce_timer = threading.Timer(
+                delay_sec,
+                self._refresh_from_targets,
+                args=(targets_path,),
+            )
+            self._debounce_timer.daemon = True
+            self._debounce_timer.start()
+
+    def _refresh_from_targets(self, targets_path: str):
+        """
+        targets.json이 완전히 기록된 뒤 snapshot/timestamp 갱신.
+        """
+        # 1) 파일 쓰기 완료 대기
+        if not wait_until_file_stable(targets_path, interval_sec=0.5, stable_rounds=3, timeout_sec=60.0):
+            print(f"[Watcher] targets.json 안정화 대기 실패(Timeout): {targets_path}")
+            return
+
+        # 2) JSON 파싱 레이스를 방지하기 위해 예외 처리 + 짧은 재시도
+        last_err = None
+        for attempt in range(3):
+            try:
+                s_path = generate_snapshot()
+                print(f"[Image] Update a new snapshot metadata: {s_path}\n")
+                ts_path = generate_timestamp()
+                print(f"[Image] Update a new timestamp metadata: {ts_path}\n")
+                return
+            except json.JSONDecodeError as e:
+                last_err = e
+                print(f"[Watcher] JSONDecodeError (attempt={attempt+1}/3): {e}")
+                time.sleep(0.5)
+
+        print(f"[Watcher] snapshot/timestamp 갱신 실패: {last_err}")
+
+    
     # targets.json 변경 감지
     def on_modified(self, event):
+        if event.is_directory:
+            return
+
         fname = os.path.basename(event.src_path)
-        
-        # 변경된 target 메타데이터에 대한 snapshot, timestamp 메타데이터 갱신
-        if fname == "targets.json":
-            s_path = generate_snapshot()
-            print(f"[Image] Update a new snapshot metadata: {s_path}\n")
-            ts_path = generate_timestamp()
-            print(f"[Image] Update a new timestamp metadata: {ts_path}\n")
-    
-    # targets.json 생성 감지(처음 생성할 경우) -> 현재 사용 X
+        if fname != self._targets_name:
+            return
+
+        # targets.json에 대해서만 반응
+        self._schedule_targets_refresh(event.src_path)
+
+    # targets.json “생성” 감지
     def on_created(self, event):
         if event.is_directory:
-            TARGET_PATH = "../data/target_new.json"
-            # 추후 target_new.json / target_image.json 경로 및 이름을 통일
-            
-            if not os.path.exists(TARGET_PATH):
-                print("[Error] target_new.json not found")
-                return
+            return
 
-            with open(TARGET_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
+        fname = os.path.basename(event.src_path)
+        if fname != self._targets_name:
+            return
 
-            targets = {}
-            sk = SigningKey.from_pem(open(self.signing_key_path).read())
-
-            for folder_name, files in data.items():
-                if folder_name == "version":
-                    continue
-                folder_path = os.path.join(self.watch_dir, folder_name)
-
-                for file_name, file_info in files.items():
-                    rel_path = file_info.get("path")
-                    full_path = os.path.join(folder_path, rel_path)
-                    if not os.path.exists(full_path):
-                        print(f"[Watcher] File not found: {full_path}")
-                        continue
-
-                    with open(full_path, "rb") as f:
-                        content = f.read()
-                    sha256_digest = hashlib.sha256(content).digest()
-                    file_info["sha256"] = base64.b64encode(sha256_digest).decode('utf-8')
-                    file_info["signature"] = base64.b64encode(sk.sign(sha256_digest)).decode('utf-8')
-
-                    targets[file_name] = {
-                        "hashes": {"sha256": hashlib.sha256(content).hexdigest()},
-                        "length": len(content)
-                    }
-
-            output = {
-                "signed": {
-                    "_type": "targets",
-                    "spec_version": "1.0.0",
-                    "version": 1,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "expires": "2030-01-01T00:00:00Z",
-                    "targets": targets
-                },
-                "signatures": []
-            }
-
-            os.makedirs("./data", exist_ok=True)
-            target_json_path = "./data/target_image.json"
-            with open(target_json_path, "w", encoding="utf-8") as f:
-                json.dump(output, f, indent=4, ensure_ascii=False)
-            print(f"[Watcher] ✅ target_image.json created with timestamp")
-
-            output_tar_path = "./data/update_image.tar.xz"
-            # self.json_handler.create_new_update_tarball(target_json_path, self.watch_dir, output_tar_path)
-            print(f"[Watcher] 🗜️ Tarball created: {output_tar_path}")
+        # targets.json 생성에 대해서만 반응
+        self._schedule_targets_refresh(event.src_path)
 
 
 def configure_tls(client, ca_cert, client_cert, client_key):
@@ -233,32 +262,6 @@ def configure_tls(client, ca_cert, client_cert, client_key):
         tls_version=ssl.PROTOCOL_TLSv1_2
     )
     client.tls_insecure_set(False)
-
-# def process_new_chunks_periodically(interval_sec=5):
-#     """
-#     WATCH_DIR 안의 new_chunks.tar.gz를 주기적으로 확인.
-#     - 있으면 CHUNKS_DIR에 풀고, new_chunks.tar.gz 삭제
-#     - manifests.tar.gz는 외부에서 이미 새걸로 덮어쓴다고 가정
-#       (우리는 그냥 있는 그대로 /manifests 로 서비스)
-#     """
-#     while True:
-#         try:
-#             if os.path.exists(NEW_CHUNKS_TAR):
-#                 print(f"[Repo] 🔔 new_chunks.tar.gz detected: {NEW_CHUNKS_TAR}")
-#                 with tarfile.open(NEW_CHUNKS_TAR, "r:gz") as tar:
-#                     tar.extractall(CHUNKS_DIR)
-#                 os.remove(NEW_CHUNKS_TAR)
-#                 print(f"[Repo] ✅ new_chunks.tar.gz extracted into chunks_storage and removed")
-
-#                 # manifests.tar.gz는 처음엔 없을 수도 있음
-#                 if os.path.exists(MANIFESTS_TAR):
-#                     print(f"[Repo] ℹ️ manifests.tar.gz present (will be served by /manifests)")
-#                 else:
-#                     print(f"[Repo] ⚠️ manifests.tar.gz not found yet")
-#         except Exception as e:
-#             print(f"[Repo] ❌ Error while processing new_chunks.tar.gz: {e}")
-#         time.sleep(interval_sec)
-
 
 
 if __name__ == "__main__":
@@ -273,7 +276,7 @@ if __name__ == "__main__":
     # ).start()
     print("[Main] new_chunks watcher started")
 
-    MQTT_BROKER = "192.168.35.202"
+    MQTT_BROKER = "10.213.196.125"
     MQTT_PORT = 8883
     WATCH_DIR = "../Image_Repo/meta"
     files_path = "./data/update_image.tar.xz"

@@ -430,6 +430,38 @@ def sign_parent_targets(parent_targets_path: str) -> None:
     with open(parent_targets_path, "w", encoding="utf-8") as f:
         json.dump(obj, f, indent=2, ensure_ascii=False)
 
+def wait_until_file_stable(path: str, interval_sec: float = 1.0, stable_rounds: int = 3, timeout_sec: float = 120.0) -> bool:
+    start = time.time()
+    last_size = -1
+    last_mtime = -1.0
+    stable = 0
+
+    while True:
+        if not os.path.exists(path):
+            stable = 0
+        else:
+            try:
+                st = os.stat(path)
+                cur_size = st.st_size
+                cur_mtime = st.st_mtime
+
+                if cur_size == last_size and cur_mtime == last_mtime:
+                    stable += 1
+                else:
+                    stable = 0
+
+                last_size = cur_size
+                last_mtime = cur_mtime
+
+                if stable >= stable_rounds:
+                    return True
+            except OSError:
+                stable = 0
+
+        if (time.time() - start) >= timeout_sec:
+            return False
+        
+        time.sleep(interval_sec)
 
 class FileChangeHandler(FileSystemEventHandler):
     def __init__(self, watch_dir: str, image_repo_root: str) -> None:
@@ -473,6 +505,8 @@ class FileChangeHandler(FileSystemEventHandler):
         ensure_dirs(CHUNKS_DIR, self.chunks_dir_remote, self.targets_base, self.director_targets_base)
 
         # 1) FastCDC 분할 + signed.chunks 생성
+        if not wait_until_file_stable(image_path, interval_sec= 1.0, stable_rounds= 3, timeout_sec=300.0):
+            print(f"[watchdog] Fail to upload a image tar file (Timeout)")
         metrics, elapsed, signed = split_all(image_path)
         print(
             f"[watchdog] FastCDC 분할 완료 "
