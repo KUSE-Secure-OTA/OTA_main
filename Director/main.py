@@ -1,5 +1,5 @@
 # Director/main.py
-import json, time, logging
+import json, time, logging, queue
 from pathlib import Path
 
 from config import ( DIRECTOR_METADATA_DIR, TOPIC_DIRECTOR_TARGETS,
@@ -57,8 +57,12 @@ def main():
         bus.publish_meta(TOPIC_DIRECTOR_TARGETS, "targets",   targets)
 
         log.info(f"Published meta for vin={vin} (targets={t_path.name})")
-        
-        report = bus.report_queue.get()
+
+        try:
+            report = bus.report_queue.get(timeout=3.0)
+        except queue.Empty:
+            log.warning(f"[Prime ECU] No Prime ECU report within timeout for vin={vin} (continue)")
+            continue
 
         status = report.get("status")
         reason = report.get("reason") or {}

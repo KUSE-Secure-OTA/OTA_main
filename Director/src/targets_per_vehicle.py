@@ -103,15 +103,17 @@ def extract_installed_list_from_vvm(vvm_raw: Dict[str, Any]) -> List[Dict[str, A
             continue
 
         # 다양한 키 케이스 대응: image / iamge / filename
-        image_id = (
+        image_fname = (
             img_obj.get("image")
             or img_obj.get("iamge")
             or img_obj.get("filename")
         )
-        if not image_id:
+        if not image_fname:
             continue
 
-        sv = split_image_id(image_id)
+        image_name, ext = os.path.splitext(image_fname)
+
+        sv = split_image_id(image_fname)
         if not sv:
             continue
         name, ver = sv
@@ -136,7 +138,7 @@ def extract_installed_list_from_vvm(vvm_raw: Dict[str, Any]) -> List[Dict[str, A
 
         out.append({
             "ecu": ecu_id,
-            "image_id": image_id,
+            "image_id": image_name,
             "name": name,
             "version": ver,
             "image_info": image_info,
@@ -229,6 +231,7 @@ def compute_required_chunks(ecu: str, image_name: str, old_image_id: str, new_im
     """
     new_path = _manifest_path_for_image(ecu, image_name, new_image_id)
     old_path = _manifest_path_for_image(ecu, image_name, old_image_id)
+    print(f"[Director] Old path: {old_path}")
 
     new_set = _collect_chunks_from_manifest(new_path)
 
@@ -237,7 +240,14 @@ def compute_required_chunks(ecu: str, image_name: str, old_image_id: str, new_im
     except FileNotFoundError:
         old_set = set()
 
+    print("\n","="*20)
+    print("\n[Director] Old version:  ", len(old_set), "  chunks")
+    print("[Director] New version:  ", len(new_set), "  chunks")
+
     required = sorted(new_set - old_set)
+    print("[Director] New chunks:  ", len(required))
+    print("\n","="*20)
+
     return required
 
 # ---------------------------------------------------------------------------
@@ -284,6 +294,7 @@ def make_targets_for_car(vvm_raw: Dict[str, Any], global_targets: Dict[str, Any]
             continue
 
         if not need_update:
+            print("[Director] This vehicle don't need an update")
             continue
 
         any_update = True
