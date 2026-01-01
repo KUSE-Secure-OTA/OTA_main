@@ -33,10 +33,13 @@ class Installer:
         return f"{base_url}/chunks/{chunk_name}"
 
 
-    # OCI DIR를 tar로 묶어 변환
     def convert_oci_dir_to_tar(self, oci_dir: str, out_tar: str):
+        # oci-dir을 podman 이미지로 로드
+        image_ref = load_image_from_oci(oci_dir)
+
+        # podman이 보장하는 OCI image archive로 저장
         subprocess.run(
-            ["tar", "-C", oci_dir, "-cf", out_tar, "."],
+            ["podman", "save", "--format", "oci-archive", "-o", out_tar, image_ref],
             check=True
         )
 
