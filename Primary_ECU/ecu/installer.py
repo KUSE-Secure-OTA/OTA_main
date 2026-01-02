@@ -37,11 +37,8 @@ class Installer:
         # oci-dir을 podman 이미지로 로드
         image_ref = load_image_from_oci(oci_dir)
 
-        # podman이 보장하는 OCI image archive로 저장
-        subprocess.run(
-            ["podman", "save", "--format", "oci-archive", "-o", out_tar, image_ref],
-            check=True
-        )
+        subprocess.run(["podman", "save", "--format", "oci-archive", "-o", out_tar, image_ref], check=True)
+        subprocess.run(["podman", "rmi", "-f", image_ref], check=False)
 
     # Static verification pipeline 실행
     def run_static_verification(self, archive_path: str):
