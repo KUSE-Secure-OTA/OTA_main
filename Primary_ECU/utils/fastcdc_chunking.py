@@ -351,19 +351,48 @@ def import_image(reassembled_dir=REASSEMBLED_DIR):
     print(f"  import 시간: {dur:.3f} s")
     return dur
 
-def load_image_from_oci(reassembled_dir=REASSEMBLED_DIR):
+def load_image_from_oci(reassembled_dir: str) -> str:
     print('--- [5/6] OCI 이미지 → podman load ---')
     t0 = time.perf_counter()
-    oci_tar = os.path.join(reassembled_dir, 'image-oci.tar')
+
+    reassembled_dir = str(Path(reassembled_dir).resolve())
+
+    parent = str(Path(reassembled_dir).parent)
+    oci_tar = os.path.join(parent, f"{Path(reassembled_dir).name}-image-oci.tar")
+
     subprocess.run(['tar', '-C', reassembled_dir, '-cf', oci_tar, '.'], check=True)
-    subprocess.run(['podman','load','--input', oci_tar], check=True)
+
+    r = subprocess.run(
+        ['podman', 'load', '--input', oci_tar],
+        check=True,
+        capture_output=True,
+        text=True
+    )
+
+    out = (r.stdout or "") + "\n" + (r.stderr or "")
+    m = re.search(r"Loaded image:\s*(\S+)", out)
+    if not m:
+        raise RuntimeError(f"podman load succeeded but could not parse image ref.\n{out}")
+
+    image_ref = m.group(1).strip()
+
+    t1 = time.perf_counter()
+    dur = t1 - t0
+    print(f"  Loaded image: {image_ref}")
+    print(f"  load 시간: {dur:.3f} s")
+
+    return image_ref
+
+def load_image_from_tar(tar_path):
+    t0 = time.perf_counter()
+    subprocess.run(['podman','load','--input', tar_path], check=True)
     t1 = time.perf_counter()
     dur = t1 - t0
     print(f"  load 시간: {dur:.3f} s")
     return dur
 
 # ------------------------- 6) 스모크 테스트 -------------------------
-def run_container():
+def run_container(ver):
     print('--- [6/6] 컨테이너 실행 ---')
     cmd = [
         'podman', 'run', '--rm',
@@ -376,7 +405,7 @@ def run_container():
         '-e', f'DISPLAY={os.environ.get("DISPLAY", "")}',
         '-v', '/tmp/.X11-unix:/tmp/.X11-unix:rw',
         '--device', '/dev/dri',
-        IMAGE_NAME,
+        f"{IMAGE_NAME}:{ver}",
     ]
     print(f"> 실행: podman run --rm {IMAGE_NAME}")
     subprocess.run(cmd, check=True)
