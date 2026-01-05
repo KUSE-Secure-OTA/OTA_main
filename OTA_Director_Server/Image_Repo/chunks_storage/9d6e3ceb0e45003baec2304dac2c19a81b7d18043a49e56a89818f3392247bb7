@@ -1,0 +1,1 @@
+{"schemaVersion":2,"manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:b0815b2921051e9e06019aac9be3a0f5102f9cc728d82b70d7da91a2b138e69d","size":1696,"annotations":{"org.opencontainers.image.ref.name":"localhost/ivi_malicious:2.0.2"}}]}

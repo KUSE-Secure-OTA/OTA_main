@@ -2,7 +2,7 @@ import os
 import subprocess
 from pathlib import Path
 
-def generate_self_signed_cert(ip="192.168.35.202", cert_dir="./certs", days=365):
+def generate_self_signed_cert(ip="172.20.10.10", cert_dir="./certs", days=365):
     os.makedirs(cert_dir, exist_ok=True)
     cert_path = Path(cert_dir) / "https_server.crt"
     key_path = Path(cert_dir) / "https_server.key"
