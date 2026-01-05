@@ -5,6 +5,7 @@ from urllib.parse import urljoin
 from pathlib import Path
 import os, shutil, json, subprocess
 import requests
+import socket, time
 from utils.fastcdc_chunking import join_all_by_manifest
 from utils.fastcdc_chunking import load_image_from_oci
 from utils.fastcdc_chunking import load_image_from_tar
@@ -22,8 +23,49 @@ class InstallResult:
     reason: Optional[str] = None
 
 class Installer:
-    def __init__(self, storage: Storage):
+    def __init__(
+        self,
+        storage: Storage,
+        namespace: str = "default",
+        spawner_host: str = "127.0.0.1",
+        spawner_nodeport: int = 31321,  # deployment.yaml의 nodePort 기본값 :contentReference[oaicite:2]{index=2}
+        host_io_dir: str = "/home/pi/agent-io",
+    ):
         self.storage = storage
+        self.namespace = namespace
+        self.spawner_host = spawner_host
+        self.spawner_nodeport = spawner_nodeport
+        self.host_io_dir = str(Path(host_io_dir).expanduser().resolve())
+
+    def _run(self, cmd: List[str]) -> subprocess.CompletedProcess:
+        return subprocess.run(cmd, check=True, capture_output=True, text=True)
+
+    def _kubectl_json(self, args: List[str]) -> Any:
+        return json.loads(self._run(["kubectl"] + args).stdout)
+
+    def _get_node_ip(self) -> str:
+        nodes = self._kubectl_json(["get", "nodes", "-o", "json"])
+        addrs = nodes["items"][0]["status"]["addresses"]
+        internal = [a["address"] for a in addrs if a["type"] == "InternalIP"]
+        external = [a["address"] for a in addrs if a["type"] == "ExternalIP"]
+        if internal:
+            return internal[0]
+        if external:
+            return external[0]
+        raise RuntimeError("노드 IP를 찾지 못했습니다.")
+
+    def _get_nodeport(self, port: int = 4321) -> int:
+        svc = self._kubectl_json(["-n", self.namespace, "get", "svc", self.spawner_service, "-o", "json"])
+        for p in svc.get("spec", {}).get("ports", []):
+            if int(p.get("port", -1)) == int(port) and "nodePort" in p:
+                return int(p["nodePort"])
+        raise RuntimeError(f"nodePort not found: {self.namespace}/{self.spawner_service} port={port}")
+    
+    def _trigger_spawner(self, *, test_img: str) -> None:
+        # go spawner: "wake <test-image>" 형태만 읽는 전제(추가 필드는 있어도 무시 가능)
+        payload = f"wake {test_img}\n".encode()
+        with socket.create_connection((self.spawner_host, self.spawner_nodeport), timeout=5) as s:
+            s.sendall(payload)
 
     def build_image_manifest_url(self, base_url, ecu, image_name):
         filename = f"{image_name}.json"
@@ -31,7 +73,6 @@ class Installer:
     
     def build_image_chunk_url(self, base_url, chunk_name):
         return f"{base_url}/chunks/{chunk_name}"
-
 
     def convert_oci_dir_to_tar(self, oci_dir: str, out_tar: str):
         # oci-dir을 podman 이미지로 로드
@@ -65,6 +106,94 @@ class Installer:
             raise RuntimeError("Static verification FAILED for: " + archive_path)
 
         print("[Primary ECU] Static Verification PASSED")
+
+    def run_dynamic_verification(
+        self,
+        archive_path: str,
+        *,
+        test_img: str,
+        tar_name: Optional[str] = None,
+        timeout_sec: int = 600,
+        fail_on_warn: bool = False,
+    ) -> None:
+        host_dir = Path(self.host_io_dir)
+        host_dir.mkdir(parents=True, exist_ok=True)
+
+        src = Path(archive_path).expanduser().resolve()
+        if not src.exists():
+            raise FileNotFoundError(f"archive not found: {src}")
+
+        # tar 이름 결정 (agent.sh는 /in/*.tar 중 최신 파일을 집음)
+        if not tar_name:
+            tar_name = src.name
+        if not tar_name.endswith(".tar"):
+            tar_name = f"{tar_name}.tar"
+
+        # 이전 tar들이 남아있으면 최신 선택이 꼬일 수 있어서 정리(순차 실행 전제)
+        for old in host_dir.glob("*.tar"):
+            try:
+                old.unlink()
+            except Exception:
+                pass
+
+        # 이전 결과 정리
+        report_path = host_dir / "report.txt"
+        if report_path.exists():
+            report_path.unlink()
+
+        art_dir = host_dir / "artifacts"
+        if art_dir.exists() and art_dir.is_dir():
+            shutil.rmtree(art_dir)
+
+        for p in ("podman_load.log", "run_id.txt"):
+            fp = host_dir / p
+            if fp.exists():
+                try:
+                    fp.unlink()
+                except Exception:
+                    pass
+
+        # agent가 /in에서 읽을 tar를 hostPath에 복사 + mtime 최신화
+        dest_tar = host_dir / tar_name
+        shutil.copyfile(src, dest_tar)
+        os.utime(dest_tar, None)
+
+        # spawner 트리거 (TEST_IMG만 넘김)
+        self._trigger_spawner(test_img=test_img)
+
+        # agent.sh가 마지막까지 진행했는지 판단용 마커(항상 report에 남도록 구성한 문구)
+        need_markers = ("verification probe", "sensitive write")
+        deadline = time.time() + timeout_sec
+
+        last_txt = ""
+        while time.time() < deadline:
+            if report_path.exists():
+                txt = report_path.read_text(errors="ignore")
+
+                # 완료 근사 조건: 주요 섹션(6,7) 결과 라인이 report에 찍혔는지
+                if all(m in txt for m in need_markers):
+                    last_txt = txt
+                    break
+
+                last_txt = txt
+
+            time.sleep(1.0)
+
+        if not last_txt or not report_path.exists():
+            raise TimeoutError(f"dynamic verification timeout (no report in {report_path})")
+
+        # 판정: [FAIL] 있으면 실패, 옵션이면 [WARN]도 실패 처리
+        lines = last_txt.splitlines()
+        has_fail = any(line.startswith("[FAIL]") for line in lines)
+        has_warn = any(line.startswith("[WARN]") for line in lines)
+
+        if has_fail:
+            raise RuntimeError("dynamic verification FAILED (see report.txt)")
+
+        if fail_on_warn and has_warn:
+            raise RuntimeError("dynamic verification WARN treated as FAIL (see report.txt)")
+
+        return
 
     # Chunk 다운로드 및 재조립
     def download_chunk(self, update_images: List, base_url: str):
@@ -127,7 +256,19 @@ class Installer:
             # Static Verification
             self.run_static_verification(str(Path(archive_path).resolve()))
 
-            # 정적 통과 후, VVM 저장 
+            # Dynamic Verification (정적 통과 후에만 실행)
+            with measure("Dynamic Verification", system_name=SYSTEM, test_case=TC):
+                test_img = f"localhost/{image_name}:under-test"
+                tar_name = f"{image_name}-{int(time.time())}.tar"  # 충돌 방지용(호스트에 저장되는 tar 파일명)
+                self.run_dynamic_verification(
+                    str(Path(archive_path).resolve()),
+                    test_img=test_img,
+                    tar_name=tar_name,
+                    timeout_sec=600,
+                    # fail_on_warn=False,  # 필요하면 True로
+                )
+
+            # 정적+동적 통과 후, VVM 저장 
             with open("vvm.json", "w", encoding="utf-8") as f:
                 json.dump(vvm, f, indent=2)
             print("[Primary ECU] Update VVM information")
