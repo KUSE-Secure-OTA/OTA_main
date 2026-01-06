@@ -29,7 +29,10 @@ class Installer:
         namespace: str = "default",
         spawner_host: str = "127.0.0.1",
         spawner_nodeport: int = 31321,  # deployment.yaml의 nodePort 기본값 :contentReference[oaicite:2]{index=2}
-        host_io_dir: str = "/home/pi/agent-io",
+        # -----------------
+        # 환경에 맞게 변경
+        # -----------------
+        host_io_dir: str = "/home/dong/dynamic_testing/agent-io",
     ):
         self.storage = storage
         self.namespace = namespace
@@ -247,18 +250,18 @@ class Installer:
                 print(f"[Primary ECU] Packed OCI layout into archive: {archive_path}")
 
             # VVM Update
-            with open("vvm.json", "r", encoding="utf-8") as f:
-                vvm = json.load(f)
+            # with open("vvm.json", "r", encoding="utf-8") as f:
+            #     vvm = json.load(f)
 
-            for ecu in vvm["signed"]["ecu_version"]:
-                if ecu.get("ecu_serial") == t["ecu"]:
-                    ecu["target_image"]["filename"] = f"{image_name}.tar"
-                    ecu["target_image"]["fileinfo"]["hashes"]["sha256"] = \
-                        t["images"]["image_info"]["hashes"]["sha256"]
-                    ecu["target_image"]["fileinfo"]["hashes"]["sha512"] = \
-                        t["images"]["image_info"]["hashes"]["sha512"]
-                    updated_ecu_versions.append(ecu)
-                    break
+            # for ecu in vvm["signed"]["ecu_version"]:
+            #     if ecu.get("ecu_serial") == t["ecu"]:
+            #         ecu["target_image"]["filename"] = f"{image_name}.tar"
+            #         ecu["target_image"]["fileinfo"]["hashes"]["sha256"] = \
+            #             t["images"]["image_info"]["hashes"]["sha256"]
+            #         ecu["target_image"]["fileinfo"]["hashes"]["sha512"] = \
+            #             t["images"]["image_info"]["hashes"]["sha512"]
+            #         updated_ecu_versions.append(ecu)
+            #         break
 
             # Static Verification
             # self.run_static_verification(str(Path(archive_path).resolve()))
