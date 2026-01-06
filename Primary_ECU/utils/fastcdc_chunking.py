@@ -370,7 +370,7 @@ def load_image_from_oci(reassembled_dir: str) -> str:
     )
 
     out = (r.stdout or "") + "\n" + (r.stderr or "")
-    m = re.search(r"Loaded image:\s*(\S+)", out)
+    m = re.search(r"Loaded image(?:\(s\))?:\s*(\S+)", out)
     if not m:
         raise RuntimeError(f"podman load succeeded but could not parse image ref.\n{out}")
 

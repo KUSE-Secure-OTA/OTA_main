@@ -29,7 +29,7 @@ class MQTTBus:
             keyfile=key_p,
             tls_version=ssl.PROTOCOL_TLSv1_2,
         )
-        self.client.tls_insecure_set(True)  # 검증 ON
+        self.client.tls_insecure_set(True)
 
     def _on_connect(self, client, userdata, flags, rc):
         log.info(f"MQTT connected rc={rc}")
