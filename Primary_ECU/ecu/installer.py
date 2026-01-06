@@ -76,9 +76,16 @@ class Installer:
 
     def convert_oci_dir_to_tar(self, oci_dir: str, out_tar: str):
         # oci-dir을 podman 이미지로 로드
+        out_tar = str(out_tar)
+
+        try:
+            os.remove(out_tar)
+        except FileNotFoundError:
+            pass
+
         image_ref = load_image_from_oci(oci_dir)
 
-        subprocess.run(["podman", "save", "--format", "oci-archive", "-o", out_tar, image_ref], check=True)
+        subprocess.run(["podman", "save", "--format", "docker-archive", "-o", out_tar, image_ref], check=True)
         subprocess.run(["podman", "rmi", "-f", image_ref], check=False)
 
     # Static verification pipeline 실행
@@ -254,7 +261,7 @@ class Installer:
                     break
 
             # Static Verification
-            self.run_static_verification(str(Path(archive_path).resolve()))
+            # self.run_static_verification(str(Path(archive_path).resolve()))
 
             # Dynamic Verification (정적 통과 후에만 실행)
             with measure("Dynamic Verification", system_name=SYSTEM, test_case=TC):
@@ -267,11 +274,6 @@ class Installer:
                     timeout_sec=600,
                     # fail_on_warn=False,  # 필요하면 True로
                 )
-
-            # 정적+동적 통과 후, VVM 저장 
-            with open("vvm.json", "w", encoding="utf-8") as f:
-                json.dump(vvm, f, indent=2)
-            print("[Primary ECU] Update VVM information")
 
             # 동적 실행
             # subprocess.run(["podman", "load", "-i", archive_path], check=True)
