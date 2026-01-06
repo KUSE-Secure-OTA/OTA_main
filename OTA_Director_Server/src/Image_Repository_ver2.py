@@ -30,7 +30,7 @@ NEW_CHUNKS_TAR = os.path.join(WATCH_DIR, "new_chunks.tar.gz")
 os.makedirs(CHUNKS_DIR, exist_ok=True)
 
 class FlaskServer:
-    def __init__(self, host="10.213.196.125", port=8443,
+    def __init__(self, host="192.168.151.99", port=8443,
                  cert="./utils/certs/https_server.crt",
                  key="./utils/certs/https_server.key"):
         self.app = Flask(__name__)
@@ -136,7 +136,10 @@ class FileHandler:
             with open("../Image_Repo/meta/timestamp.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
             
-            upload_url = f"https://{self.MQTT_BROKER}:8443"
+            # ----------------------
+            # 교체 필요
+            # ----------------------
+            upload_url = f"https://192.168.151.99:8443"
             data["url"] = upload_url
             
             # Timestamp + URL Json 데이터 전송
@@ -261,7 +264,7 @@ def configure_tls(client, ca_cert, client_cert, client_key):
         keyfile=client_key,
         tls_version=ssl.PROTOCOL_TLSv1_2
     )
-    client.tls_insecure_set(False)
+    client.tls_insecure_set(True)
 
 
 if __name__ == "__main__":
@@ -276,7 +279,7 @@ if __name__ == "__main__":
     # ).start()
     print("[Main] new_chunks watcher started")
 
-    MQTT_BROKER = "10.213.196.125"
+    MQTT_BROKER = "10.133.238.9"
     MQTT_PORT = 8883
     WATCH_DIR = "../Image_Repo/meta"
     files_path = "./data/update_image.tar.xz"
