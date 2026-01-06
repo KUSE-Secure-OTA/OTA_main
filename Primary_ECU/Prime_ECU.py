@@ -37,8 +37,8 @@ TOPIC_REQUEST_UPDATE     = "primary/request"  # 업데이트 요청
 TOPIC_IMAGE_META         = "image/metaData"   # 이미지 메타 수신
 
 CA_CERT     = "./utils/certs/ca.crt"
-CLIENT_CERT = "./utils/certs/mqtt_client.crt"
-CLIENT_KEY  = "./utils/certs/mqtt_client.key"
+CLIENT_CERT = "./utils/certs/mqtt_rpi.crt"
+CLIENT_KEY  = "./utils/certs/mqtt_rpi.key"
 
 SYSTEM = os.environ.get("SYSTEM_NAME", "")
 TC = os.environ.get("TEST_CASE", "")
