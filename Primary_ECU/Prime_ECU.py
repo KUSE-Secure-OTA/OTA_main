@@ -161,8 +161,8 @@ class PrimeEcuHandler:
                     print("[Primary ECU] Manifest check is OK.\n")
                     vvm_version = self.installer.download_chunk(update_images, base_url)
 
-                    self.installer.update_info(layer_list, vvm_version)
-                    print("[Primary ECU] Success to update documents.\n")
+                    # self.installer.update_info(layer_list, vvm_version)
+                    # print("[Primary ECU] Success to update documents.\n")
 
                     ivi_name = vvm_version[0]["target_image"]["filename"]
                     version = ivi_name.split('_')[1].rsplit('.', 1)[0]
@@ -170,7 +170,6 @@ class PrimeEcuHandler:
                     major -= 1
                     version = f"{major}.{minor}.{patch}"
                     run_container(version)
-                    # Static Verification
 
                 else:
                     print("[FAIL] This image is not new one.\n")
