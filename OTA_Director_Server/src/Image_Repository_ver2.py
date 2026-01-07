@@ -261,7 +261,7 @@ def configure_tls(client, ca_cert, client_cert, client_key):
         keyfile=client_key,
         tls_version=ssl.PROTOCOL_TLSv1_2
     )
-    client.tls_insecure_set(False)
+    client.tls_insecure_set(True)
 
 
 if __name__ == "__main__":
