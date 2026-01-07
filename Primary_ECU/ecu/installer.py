@@ -34,34 +34,45 @@ class Installer:
 
 
     def convert_oci_dir_to_tar(self, oci_dir: str, out_tar: str):
-        # oci-dir을 podman 이미지로 로드
-        image_ref = load_image_from_oci(oci_dir)
+        out_tar = str(out_tar)   # 추가
+        image_ref = str(load_image_from_oci(oci_dir))
 
-        subprocess.run(["podman", "save", "--format", "oci-archive", "-o", out_tar, image_ref], check=True)
+        subprocess.run(["podman", "save", "--format", "docker-archive", "-o", out_tar, image_ref], check=True)
         subprocess.run(["podman", "rmi", "-f", image_ref], check=False)
 
     # Static verification pipeline 실행
     def run_static_verification(self, archive_path: str):
-        
         env = os.environ.copy()
-        env["ARCHIVE"] = archive_path   # shell pipeline에서 사용할 환경 변수
+        env["ARCHIVE"] = archive_path
 
-        # static/run_all.sh 경로 자동 설정
         static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
         runall = os.path.join(static_dir, "run_all.sh")
 
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_dir = Path("./downloads/static_out") / f"{Path(archive_path).stem}_{ts}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
         print(f"[Primary ECU] Static Verification Start  ->  {archive_path}")
-        
+        print(f"[Primary ECU] Static Out Dir            ->  {out_dir}")
+
         result = subprocess.run(
-            ["bash", runall, archive_path],
+            ["bash", runall, archive_path, str(out_dir)],
             env=env,
             capture_output=True,
             text=True
         )
 
-        if result.returncode != 0:
+        if result.stdout.strip():
             print(result.stdout)
+        
+        if result.stderr.strip():
             print(result.stderr)
+
+        policy_log = out_dir / "policy.log"
+        if policy_log.exists():
+            print(policy_log.read_text(encoding="utf-8"))
+
+        if result.returncode != 0:
             raise RuntimeError("Static verification FAILED for: " + archive_path)
 
         print("[Primary ECU] Static Verification PASSED")
@@ -92,7 +103,9 @@ class Installer:
 
             # 재조립
             with measure("Reassemble chunks", system_name=SYSTEM, test_case=TC):
-                image_name = t["images"]["image_name"]
+                image_name = str(t["images"]["image_name"])
+                downloads = Path("./downloads")
+                
                 manifest_path = f"./downloads/{image_name}.json"
                 oci_dir = f"./downloads/{image_name}"
 
