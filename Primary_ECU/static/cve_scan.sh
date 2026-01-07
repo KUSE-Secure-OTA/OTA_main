@@ -1,3 +1,4 @@
+# Primary_ECU/static/cve_scan.sh
 #!/bin/bash
 set -euo pipefail
 
@@ -8,5 +9,7 @@ if [[ ! -f "$ARCHIVE_PATH" ]]; then
 fi
 
 trivy image --input "$ARCHIVE_PATH" \
-  --severity HIGH,CRITICAL \
-  --ignore-unfixed
+  --scanners vuln \                  # 취약점 스캐너만 활성화
+  --severity HIGH,CRITICAL \         # HIGH/CRITICAL만 필터링
+  --ignore-unfixed \                 # 아직 패치 없는 취약점은 무시 (실험 정책에 따라 조정 가능)
+  --format json                      

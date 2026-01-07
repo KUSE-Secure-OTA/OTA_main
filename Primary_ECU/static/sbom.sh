@@ -1,3 +1,4 @@
+# Primary_ECU/static/sbom.sh
 #!/bin/bash
 set -euo pipefail
 
@@ -7,5 +8,5 @@ if [[ ! -f "$ARCHIVE_PATH" ]]; then
   exit 1
 fi
 
-# stdout으로 CycloneDX JSON 출력
+# 컨테이너 이미지 분석, SBOM을 CycloneDX JSON 포맷으로 출력
 trivy image --input "$ARCHIVE_PATH" --format cyclonedx

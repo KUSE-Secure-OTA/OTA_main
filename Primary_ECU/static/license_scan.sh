@@ -1,3 +1,4 @@
+# Primary_ECU/static/license_scan.sh
 #!/bin/bash
 set -euo pipefail
 
@@ -7,4 +8,7 @@ if [[ ! -f "$ARCHIVE_PATH" ]]; then
   exit 1
 fi
 
-trivy image --input "$ARCHIVE_PATH" --scanners license
+# 라이선스 스캐너 활성화
+trivy image --input "$ARCHIVE_PATH" \
+  --scanners license \
+  --format json
