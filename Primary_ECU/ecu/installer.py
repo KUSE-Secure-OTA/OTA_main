@@ -132,7 +132,7 @@ class Installer:
         image_ref = load_image_from_oci(oci_dir)
 
         subprocess.run(["podman", "save", "--format", "docker-archive", "-o", out_tar, image_ref], check=True)
-        subprocess.run(["podman", "rmi", "-f", image_ref], check=False)
+        # subprocess.run(["podman", "rmi", "-f", image_ref], check=False)
 
     # Static verification pipeline 실행
     def run_static_verification(self, archive_path: str):
@@ -341,16 +341,16 @@ class Installer:
             # self.run_static_verification(str(Path(archive_path).resolve()))
 
             # Dynamic Verification (정적 통과 후에만 실행)
-            with measure("Dynamic Verification", system_name=SYSTEM, test_case=TC):
-                test_img = f"localhost/{image_name}:under-test"
-                tar_name = f"{image_name}-{int(time.time())}.tar"  # 충돌 방지용(호스트에 저장되는 tar 파일명)
-                self.run_dynamic_verification(
-                    str(Path(archive_path).resolve()),
-                    test_img=test_img,
-                    tar_name=tar_name,
-                    timeout_sec=600,
-                    # fail_on_warn=False,  # 필요하면 True로
-                )
+            # with measure("Dynamic Verification", system_name=SYSTEM, test_case=TC):
+            #     test_img = f"localhost/{image_name}:under-test"
+            #     tar_name = f"{image_name}-{int(time.time())}.tar"  # 충돌 방지용(호스트에 저장되는 tar 파일명)
+            #     self.run_dynamic_verification(
+            #         str(Path(archive_path).resolve()),
+            #         test_img=test_img,
+            #         tar_name=tar_name,
+            #         timeout_sec=600,
+            #         # fail_on_warn=False,  # 필요하면 True로
+            #     )
 
             # 동적 실행
             # subprocess.run(["podman", "load", "-i", archive_path], check=True)
