@@ -1,7 +1,7 @@
 # Primary_ECU/Prime_ECU.py
 import json, ssl, time, tarfile, os, shutil, binascii, hashlib
 import paho.mqtt.client as mqtt
-import requests
+import requests, sys
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urljoin
 from utils.fastcdc_chunking import run_container
@@ -168,6 +168,15 @@ class PrimeEcuHandler:
                     ivi_name = vvm_version[0]["target_image"]["filename"]
                     image_name = Path(ivi_name).stem
                     run_container(f"localhost/{image_name}:latest")
+
+                    print("[Prime ECU] run_container finished. Stopping MQTT loop and exiting.")
+                    try:
+                        self.client.loop_stop()
+                        self.client.disconnect()
+                    except Exception as e:
+                        print(f"[Prime ECU] cleanup error: {e}")
+
+                    sys.exit(0)
 
                 else:
                     print("[FAIL] This image is not new one.\n")

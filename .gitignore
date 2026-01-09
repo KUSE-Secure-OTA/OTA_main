@@ -1,1 +1,65 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv/
+venv/
+ENV/
+
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+
+# Logs & Outputs
+*.log
+*.out
+*.tmp
+
+
+# OTA Artifacts 
+artifacts/
+downloads/
+chunk_storage/
+fs_root/
+
+
+# Container / Image Files
+*.tar
+*.tar.gz
+*.tar.xz
+*.oci
+*.img
+
+
+# SBOM / Scan Results
+*sbom*.json
+*sbom*.xml
+*cve*.log
+*license*.log
+*fs_scan*.log
+
+
+# Keys & Certificates 
+keys/
+root_keys/
 *.pem
+*.crt
+*.key
+
+
+# MQTT / TLS / Secret
+*.conf
+*.secret
+*.password
+
+
+# Runtime Generated Data
+Primary_ECU/downloads/
+OTA_Director_Server/src_add/stage/*
+!OTA_Director_Server/src_add/stage/.gitkeep
