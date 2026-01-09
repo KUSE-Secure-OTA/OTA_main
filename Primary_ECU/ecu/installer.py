@@ -14,6 +14,12 @@ from make_vvm import load_or_create_ed25519_private_key, calc_ed25519_keyid_from
 from utils.metrics import measure
 from .storage import Storage
 
+# -------------------------------------------------------------------
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+# -------------------------------------------------------------------
+
 SYSTEM = os.environ.get("SYSTEM_NAME", "")
 TC = os.environ.get("TEST_CASE", "")
 
@@ -32,13 +38,50 @@ class Installer:
         # -----------------
         # 환경에 맞게 변경
         # -----------------
-        host_io_dir: str = "/home/dong/dynamic_testing/agent-io",
+        host_io_dir: str = "/home/kuse/ota/dynamic_testing/agent-io",
     ):
         self.storage = storage
         self.namespace = namespace
         self.spawner_host = spawner_host
         self.spawner_nodeport = spawner_nodeport
         self.host_io_dir = str(Path(host_io_dir).expanduser().resolve())
+
+    # -------------------------------------------------------------------
+    def _make_session(self) -> requests.Session:
+        s = requests.Session()
+        retries = Retry(
+            total=3,
+            backoff_factor=0.3,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET"],
+        )
+        adapter = HTTPAdapter(
+            max_retries=retries,
+            pool_connections=32,
+            pool_maxsize=32,
+        )
+        s.mount("http://", adapter)
+        s.mount("https://", adapter)
+        return s
+
+    def _download_one_chunk(self, session: requests.Session, url: str, out_path: str) -> None:
+        # 이미 있으면 스킵(캐시)
+        if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+            return
+
+        tmp_path = out_path + ".part"
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
+        with session.get(url, stream=True, verify=False, timeout=(5, 120)) as r:
+            r.raise_for_status()
+            with open(tmp_path, "wb") as f:
+                # 8KB는 너무 작아서 오버헤드 큼 → 1MB로 키우는 게 체감 큼
+                for chunk in r.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        f.write(chunk)
+
+        os.replace(tmp_path, out_path)
+    # -------------------------------------------------------------------
 
     def _run(self, cmd: List[str]) -> subprocess.CompletedProcess:
         return subprocess.run(cmd, check=True, capture_output=True, text=True)
@@ -89,7 +132,7 @@ class Installer:
         image_ref = load_image_from_oci(oci_dir)
 
         subprocess.run(["podman", "save", "--format", "docker-archive", "-o", out_tar, image_ref], check=True)
-        subprocess.run(["podman", "rmi", "-f", image_ref], check=False)
+        # subprocess.run(["podman", "rmi", "-f", image_ref], check=False)
 
     # Static verification pipeline 실행
     def run_static_verification(self, archive_path: str):
@@ -212,22 +255,53 @@ class Installer:
             with measure("Download Chunks", system_name=SYSTEM, test_case=TC):
                 chunk_list = t["images"]["required_chunks"]
 
+                # -------------------------------------------------------------------
+                seen = set()
+                uniq = []
                 for c in chunk_list:
-                    url = self.build_image_chunk_url(base_url, c)
-                    out_path = f"./downloads/chunk_storage/{c}"
-                    print(f"[Primary ECU] GET:  {url}")
+                    if c not in seen:
+                        seen.add(c)
+                        uniq.append(c)
+                chunk_list = uniq
 
-                    try:
-                        with requests.get(url, stream=True, verify=False) as response:
-                            response.raise_for_status()
-                            with open(out_path, "wb") as f:
-                                for chunk in response.iter_content(chunk_size=8192):
-                                    if chunk:
-                                        f.write(chunk)
-                        print(f"[OK] saved chunk -> {out_path}")
+                session = self._make_session()
+
+                max_workers = int(os.environ.get("CHUNKS_DL_WORKERS", "8"))
+
+                futures = []
+                with ThreadPoolExecutor(max_workers=max_workers) as ex:
+                    for c in chunk_list:
+                        url = self.build_image_chunk_url(base_url, c)
+                        out_path = f"./downloads/chunk_storage/{c}"
+                        futures.append(ex.submit(self._download_one_chunk, session, url, out_path))
+
+                    # 에러를 여기서 모아서 한번에 터뜨리기
+                    for i, fut in enumerate(as_completed(futures), 1):
+                        exc = fut.exception()
+                        if exc is not None:
+                            raise RuntimeError(f"chunk download failed: {exc}") from exc
+
+                        # 진행률 로그(원하시면)
+                        if i % 50 == 0 or i == len(futures):
+                            print(f"[Primary ECU] downloaded {i}/{len(futures)} chunks (workers={max_workers})")
+                # -------------------------------------------------------------------
+
+                # for c in chunk_list:
+                #     url = self.build_image_chunk_url(base_url, c)
+                #     out_path = f"./downloads/chunk_storage/{c}"
+                #     print(f"[Primary ECU] GET:  {url}")
+
+                #     try:
+                #         with requests.get(url, stream=True, verify=False) as response:
+                #             response.raise_for_status()
+                #             with open(out_path, "wb") as f:
+                #                 for chunk in response.iter_content(chunk_size=8192):
+                #                     if chunk:
+                #                         f.write(chunk)
+                #         print(f"[OK] saved chunk -> {out_path}")
                     
-                    except Exception as e:
-                        print(f"[FAIL] failed to download chunk {c} from {url}: {e}")
+                #     except Exception as e:
+                #         print(f"[FAIL] failed to download chunk {c} from {url}: {e}")
 
             # 재조립
             with measure("Reassemble chunks", system_name=SYSTEM, test_case=TC):
@@ -250,18 +324,18 @@ class Installer:
                 print(f"[Primary ECU] Packed OCI layout into archive: {archive_path}")
 
             # VVM Update
-            # with open("vvm.json", "r", encoding="utf-8") as f:
-            #     vvm = json.load(f)
+            with open("vvm.json", "r", encoding="utf-8") as f:
+                vvm = json.load(f)
 
-            # for ecu in vvm["signed"]["ecu_version"]:
-            #     if ecu.get("ecu_serial") == t["ecu"]:
-            #         ecu["target_image"]["filename"] = f"{image_name}.tar"
-            #         ecu["target_image"]["fileinfo"]["hashes"]["sha256"] = \
-            #             t["images"]["image_info"]["hashes"]["sha256"]
-            #         ecu["target_image"]["fileinfo"]["hashes"]["sha512"] = \
-            #             t["images"]["image_info"]["hashes"]["sha512"]
-            #         updated_ecu_versions.append(ecu)
-            #         break
+            for ecu in vvm["signed"]["ecu_version"]:
+                if ecu.get("ecu_serial") == t["ecu"]:
+                    ecu["target_image"]["filename"] = f"{image_name}.tar"
+                    ecu["target_image"]["fileinfo"]["hashes"]["sha256"] = \
+                        t["images"]["image_info"]["hashes"]["sha256"]
+                    ecu["target_image"]["fileinfo"]["hashes"]["sha512"] = \
+                        t["images"]["image_info"]["hashes"]["sha512"]
+                    updated_ecu_versions.append(ecu)
+                    break
 
             # Static Verification
             # self.run_static_verification(str(Path(archive_path).resolve()))

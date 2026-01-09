@@ -1,12 +1,13 @@
 # Primary_ECU/Prime_ECU.py
 import json, ssl, time, tarfile, os, shutil, binascii, hashlib
 import paho.mqtt.client as mqtt
-import requests
+import requests, sys
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urljoin
 from utils.fastcdc_chunking import run_container
 from utils.fastcdc_chunking import join_all, load_image_from_oci, run_container
 from utils.metrics import measure
+from pathlib import Path
 
 try:
     from zoneinfo import ZoneInfo  # Python 3.9+
@@ -37,8 +38,8 @@ TOPIC_REQUEST_UPDATE     = "primary/request"  # 업데이트 요청
 TOPIC_IMAGE_META         = "image/metaData"   # 이미지 메타 수신
 
 CA_CERT     = "./utils/certs/ca.crt"
-CLIENT_CERT = "./utils/certs/mqtt_client.crt"
-CLIENT_KEY  = "./utils/certs/mqtt_client.key"
+CLIENT_CERT = "./utils/certs/mqtt_rpi.crt"
+CLIENT_KEY  = "./utils/certs/mqtt_rpi.key"
 
 SYSTEM = os.environ.get("SYSTEM_NAME", "")
 TC = os.environ.get("TEST_CASE", "")
@@ -165,11 +166,17 @@ class PrimeEcuHandler:
                     # print("[Primary ECU] Success to update documents.\n")
 
                     ivi_name = vvm_version[0]["target_image"]["filename"]
-                    version = ivi_name.split('_')[1].rsplit('.', 1)[0]
-                    major, minor, patch = map(int, version.split('.'))
-                    major -= 1
-                    version = f"{major}.{minor}.{patch}"
-                    run_container(version)
+                    image_name = Path(ivi_name).stem
+                    run_container(f"localhost/{image_name}:latest")
+
+                    print("[Prime ECU] run_container finished. Stopping MQTT loop and exiting.")
+                    try:
+                        self.client.loop_stop()
+                        self.client.disconnect()
+                    except Exception as e:
+                        print(f"[Prime ECU] cleanup error: {e}")
+
+                    sys.exit(0)
 
                 else:
                     print("[FAIL] This image is not new one.\n")
