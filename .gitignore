@@ -25,7 +25,7 @@ Thumbs.db
 # OTA Artifacts 
 artifacts/
 downloads/
-chunk_storage/
+chunks_storage/
 fs_root/
 
 
@@ -51,6 +51,9 @@ root_keys/
 *.pem
 *.crt
 *.key
+*.srl
+*.csr
+*.cnf
 
 
 # MQTT / TLS / Secret

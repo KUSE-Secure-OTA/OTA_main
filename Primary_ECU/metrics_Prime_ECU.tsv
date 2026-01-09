@@ -1,0 +1,40 @@
+ts	pid	entry	system	test_case	step	status	elapsed_ms	cpu_avg_pct	cpu_max_pct	rss_avg_mb	rss_max_mb	samples	err
+2026-01-06T18:29:54	50193	Prime_ECU			Director Metadata Verification	OK	207.45	0.00	0.00	35.77	35.77	1	
+2026-01-06T18:32:04	50193	Prime_ECU			Image Metadata Verification	FAIL	134020.93	0.21	5.00	39.01	39.01	658	ConnectTimeout: HTTPSConnectionPool(host='10.133.238.9', port=8443): Max retries exceeded with url: /meta/snapshot.json (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x78221c336b60>, 'Connection to 10.133.238.9 timed out. (connect timeout=None)'))
+2026-01-06T18:41:40	53853	Prime_ECU			Director Metadata Verification	OK	202.16	0.00	0.00	35.78	35.78	1	
+2026-01-06T18:45:56	55201	Prime_ECU			Director Metadata Verification	OK	201.26	0.00	0.00	35.92	35.92	1	
+2026-01-06T18:47:40	55821	Prime_ECU			Director Metadata Verification	OK	202.29	0.00	0.00	35.77	35.77	1	
+2026-01-06T18:48:21	56038	Prime_ECU			Director Metadata Verification	OK	203.59	0.00	0.00	35.92	35.92	1	
+2026-01-06T18:48:36	56156	Prime_ECU			Director Metadata Verification	OK	205.94	0.00	0.00	35.91	35.91	1	
+2026-01-06T18:48:36	56156	Prime_ECU			Image Metadata Verification	OK	202.97	0.00	0.00	39.15	39.15	1	
+2026-01-06T18:48:36	56156	Prime_ECU			Cross check metadatas	OK	203.25	0.00	0.00	39.29	39.29	1	
+2026-01-06T18:48:59	56156	Prime_ECU			Download Chunks	OK	24402.84	43.80	64.80	39.71	39.71	121	
+2026-01-06T18:49:00	56156	Prime_ECU			Reassemble chunks	OK	1018.08	77.42	98.60	40.84	41.27	5	
+2026-01-06T18:49:07	56156	Prime_ECU				FAIL	6241.71	0.32	5.00	41.02	41.27	31	RuntimeError: podman load succeeded but could not parse image ref. Loaded image(s): localhost/ivi_3.0.0:latest  Getting image source signatures Copying blob sha256:b52d3d7ff028504d949fd77c27fe1b7295fa26954ae0a342cd71c69d0aa0fb69 Copying blob sha256:7ee21936fd360a976e12830441b340796de3b51ac738ae1bbbc44e987263186c Copying blob sha256:b9afc4d2a04b71e9c13a334590c071ae9e75620e9701cced2af2cd4827e6539e Copying blob sha256:3e0f454b7deb882c563861a44fb7f8340d20e624e4410da1a05da9ab61ae1bf4 Copying blob sha256:b3584f8a2c4f88f13694bf6b0b0761778e2de815698fdd9c806f51774bc6c73d Copying blob sha256:39acf16176e1190ea0a4902be18228e2bda706e9c0ab8d96c214ce1ca5851e57 Copying blob sha256:dc326fbf77b9ae6c8d9ef3f7faca6de2de1d9b1d7d7a918c2019f7b26fdfb98d Copying blob sha256:8e9556c13fd65c0850d4c4f1a2b636e3792a2362786df1439f15c82ba2c36e6e Copying config sha256:734caa6d7d104794814a4bd7d8066d7b6c057267c82b770572004b78c3695d24 Writing manifest to image destination Storing signatures 
+2026-01-06T19:03:42	62936	Prime_ECU			Director Metadata Verification	OK	201.74	0.00	0.00	35.74	35.74	1	
+2026-01-06T19:03:42	62936	Prime_ECU			Image Metadata Verification	OK	201.31	0.00	0.00	39.11	39.11	1	
+2026-01-06T19:03:42	62936	Prime_ECU			Cross check metadatas	OK	201.02	0.00	0.00	39.25	39.25	1	
+2026-01-06T19:04:06	62936	Prime_ECU			Download Chunks	OK	23305.61	53.46	69.80	39.55	39.55	116	
+2026-01-06T19:04:06	62936	Prime_ECU			Reassemble chunks	OK	1606.05	85.34	99.80	40.56	40.89	8	
+2026-01-06T19:04:26	62936	Prime_ECU				FAIL	19803.86	0.20	5.00	40.81	41.04	98	RuntimeError: podman load succeeded but could not parse image ref. Loaded image(s): localhost/ivi_3.0.0:latest  Getting image source signatures Copying blob sha256:b52d3d7ff028504d949fd77c27fe1b7295fa26954ae0a342cd71c69d0aa0fb69 Copying blob sha256:7ee21936fd360a976e12830441b340796de3b51ac738ae1bbbc44e987263186c Copying blob sha256:b9afc4d2a04b71e9c13a334590c071ae9e75620e9701cced2af2cd4827e6539e Copying blob sha256:3e0f454b7deb882c563861a44fb7f8340d20e624e4410da1a05da9ab61ae1bf4 Copying blob sha256:b3584f8a2c4f88f13694bf6b0b0761778e2de815698fdd9c806f51774bc6c73d Copying blob sha256:39acf16176e1190ea0a4902be18228e2bda706e9c0ab8d96c214ce1ca5851e57 Copying blob sha256:dc326fbf77b9ae6c8d9ef3f7faca6de2de1d9b1d7d7a918c2019f7b26fdfb98d Copying blob sha256:8e9556c13fd65c0850d4c4f1a2b636e3792a2362786df1439f15c82ba2c36e6e Copying config sha256:734caa6d7d104794814a4bd7d8066d7b6c057267c82b770572004b78c3695d24 Writing manifest to image destination Storing signatures 
+2026-01-06T19:05:51	65770	Prime_ECU			Director Metadata Verification	OK	201.56	0.00	0.00	36.76	36.76	1	
+2026-01-06T19:05:51	65770	Prime_ECU			Image Metadata Verification	OK	201.57	0.00	0.00	39.85	39.85	1	
+2026-01-06T19:05:51	65770	Prime_ECU			Cross check metadatas	OK	201.22	0.00	0.00	39.99	39.99	1	
+2026-01-06T19:06:10	65770	Prime_ECU			Download Chunks	OK	18479.52	57.47	74.60	40.36	40.36	92	
+2026-01-06T19:06:11	65770	Prime_ECU			Reassemble chunks	OK	1205.20	80.52	104.70	41.45	41.84	6	
+2026-01-06T19:06:31	65770	Prime_ECU				OK	20812.73	0.19	5.00	41.84	41.84	103	
+2026-01-06T19:06:31	65770	Prime_ECU			Dynamic Verification	FAIL	203.10	0.00	0.00	41.84	41.84	1	PermissionError: [Errno 13] Permission denied: '/home/pi'
+2026-01-06T19:10:16	69379	Prime_ECU			Director Metadata Verification	OK	202.45	0.00	0.00	35.63	35.63	1	
+2026-01-06T19:10:16	69379	Prime_ECU			Image Metadata Verification	OK	202.06	0.00	0.00	39.01	39.01	1	
+2026-01-06T19:10:17	69379	Prime_ECU			Cross check metadatas	OK	201.91	0.00	0.00	39.15	39.15	1	
+2026-01-06T19:10:36	69379	Prime_ECU			Download Chunks	OK	20301.04	59.65	72.50	39.71	39.71	101	
+2026-01-06T19:10:36	69379	Prime_ECU			Reassemble chunks	OK	810.22	73.45	99.60	40.50	40.90	4	
+2026-01-06T19:11:06	69379	Prime_ECU				OK	30412.09	0.75	77.70	40.90	40.90	151	
+2026-01-06T19:11:06	69379	Prime_ECU			Dynamic Verification	FAIL	202.83	0.00	0.00	40.90	40.90	1	PermissionError: [Errno 13] Permission denied: '/home/pi'
+2026-01-06T19:13:32	72657	Prime_ECU			Director Metadata Verification	OK	201.41	0.00	0.00	36.90	36.90	1	
+2026-01-06T19:13:32	72657	Prime_ECU			Image Metadata Verification	OK	202.32	0.00	0.00	40.00	40.00	1	
+2026-01-06T19:13:32	72657	Prime_ECU			Cross check metadatas	OK	203.64	0.00	0.00	40.14	40.14	1	
+2026-01-06T19:13:52	72657	Prime_ECU			Download Chunks	OK	19894.71	61.78	69.80	40.53	40.53	99	
+2026-01-06T19:13:53	72657	Prime_ECU			Reassemble chunks	OK	803.94	70.90	94.70	41.48	41.85	4	
+2026-01-06T19:14:21	72657	Prime_ECU				OK	29233.29	0.65	69.80	41.99	41.99	145	
+2026-01-06T19:24:23	72657	Prime_ECU			Dynamic Verification	FAIL	623766.54	0.41	96.70	41.99	41.99	3088	TimeoutError: dynamic verification timeout (no report in /home/dong/dynamic_testing/agent-io/report.txt)
