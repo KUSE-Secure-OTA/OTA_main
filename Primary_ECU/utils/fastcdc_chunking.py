@@ -374,14 +374,24 @@ def load_image_from_oci(reassembled_dir: str) -> str:
     if not m:
         raise RuntimeError(f"podman load succeeded but could not parse image ref.\n{out}")
 
-    image_ref = m.group(1).strip()
+    loaded_ref = m.group(1).strip()  # 예: localhost/seame_hu_app:1.0.0
+
+    # run_container()가 기대하는 규칙: localhost/<image_name>:<ver>
+    # 여기서는 <ver>가 latest로 찍히는 케이스를 맞춰줌
+    image_name = Path(reassembled_dir).name           # 예: ivi_2.0.0
+    expected_ref = f"localhost/{image_name}:latest"   # 예: localhost/ivi_2.0.0:latest
+
+    if loaded_ref != expected_ref:
+        subprocess.run(["podman", "tag", loaded_ref, expected_ref], check=True)
 
     t1 = time.perf_counter()
     dur = t1 - t0
-    print(f"  Loaded image: {image_ref}")
+    print(f"  Loaded image: {loaded_ref}")
+    print(f"  Retagged as:  {expected_ref}")
     print(f"  load 시간: {dur:.3f} s")
 
-    return image_ref
+    # 이후 단계(save 등)에서 “기대 태그”를 쓰도록 expected_ref를 리턴
+    return expected_ref
 
 def load_image_from_tar(tar_path):
     t0 = time.perf_counter()
@@ -392,11 +402,12 @@ def load_image_from_tar(tar_path):
     return dur
 
 # ------------------------- 6) 스모크 테스트 -------------------------
-def run_container(ver):
+def run_container(image_ref:str):
     print('--- [6/6] 컨테이너 실행 ---')
     cmd = [
         'podman', 'run', '--rm',
         # 원래 스크립트의 -it
+        '--pull=never',
         '-it',
         '--name', 'hu_qt5_run',
         '--network', 'host',
@@ -405,9 +416,9 @@ def run_container(ver):
         '-e', f'DISPLAY={os.environ.get("DISPLAY", "")}',
         '-v', '/tmp/.X11-unix:/tmp/.X11-unix:rw',
         '--device', '/dev/dri',
-        f"{IMAGE_NAME}:{ver}",
+        image_ref,
     ]
-    print(f"> 실행: podman run --rm {IMAGE_NAME}")
+    print(f"> 실행: podman run --rm {image_ref}")
     subprocess.run(cmd, check=True)
 
 # ------------------------- 메인 -------------------------

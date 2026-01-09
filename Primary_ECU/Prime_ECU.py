@@ -7,6 +7,7 @@ from urllib.parse import urljoin
 from utils.fastcdc_chunking import run_container
 from utils.fastcdc_chunking import join_all, load_image_from_oci, run_container
 from utils.metrics import measure
+from pathlib import Path
 
 try:
     from zoneinfo import ZoneInfo  # Python 3.9+
@@ -165,11 +166,8 @@ class PrimeEcuHandler:
                     # print("[Primary ECU] Success to update documents.\n")
 
                     ivi_name = vvm_version[0]["target_image"]["filename"]
-                    version = ivi_name.split('_')[1].rsplit('.', 1)[0]
-                    major, minor, patch = map(int, version.split('.'))
-                    major -= 1
-                    version = f"{major}.{minor}.{patch}"
-                    run_container(version)
+                    image_name = Path(ivi_name).stem
+                    run_container(f"localhost/{image_name}:latest")
 
                 else:
                     print("[FAIL] This image is not new one.\n")
