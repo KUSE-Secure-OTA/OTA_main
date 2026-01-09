@@ -2,6 +2,9 @@
 
 이 문서는 국민대학교 자동차융합대학 차량보안동아리 KUSE 2025-2 'Secure OTA' 프로젝트 구현 내용에 대한 설명입니다.
 
+동적 테스트 부분은 아래 링크 참고 바랍니다.
+https://github.com/vinggyu/dynamic_testing.git
+
 ------------------------------------------------------------------------
 
 ## OEM Server(chunking_watchdog.py)
