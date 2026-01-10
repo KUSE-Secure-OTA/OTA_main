@@ -348,7 +348,7 @@ class Installer:
                     str(Path(archive_path).resolve()),
                     test_img=test_img,
                     tar_name=tar_name,
-                    timeout_sec=600,
+                    timeout_sec=2400,
                     # fail_on_warn=False,  # 필요하면 True로
                 )
 
