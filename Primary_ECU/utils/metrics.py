@@ -157,7 +157,7 @@ def measure(
     step: str,
     system_name: str = "",
     test_case: str = "",
-    sample_interval_sec: float = 0.2,
+    sample_interval_sec: float = 0.01,
 ):
     """
     단계별 측정(프로세스 기준):
