@@ -30,7 +30,7 @@ NEW_CHUNKS_TAR = os.path.join(WATCH_DIR, "new_chunks.tar.gz")
 os.makedirs(CHUNKS_DIR, exist_ok=True)
 
 class FlaskServer:
-    def __init__(self, host="192.168.151.99", port=8443,
+    def __init__(self, host="0.0.0.0", port=8443,
                  cert="./utils/certs/https_server.crt",
                  key="./utils/certs/https_server.key"):
         self.app = Flask(__name__)
@@ -139,7 +139,7 @@ class FileHandler:
             # ----------------------
             # 교체 필요
             # ----------------------
-            upload_url = f"https://192.168.151.99:8443"
+            upload_url = f"https://{self.MQTT_BROKER}:8443"
             data["url"] = upload_url
             
             # Timestamp + URL Json 데이터 전송
