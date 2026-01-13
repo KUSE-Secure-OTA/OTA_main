@@ -13,6 +13,10 @@ from make_vvm import load_or_create_ed25519_private_key, calc_ed25519_keyid_from
 from utils.metrics import measure
 from .storage import Storage
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
 SYSTEM = os.environ.get("SYSTEM_NAME", "")
 TC = os.environ.get("TEST_CASE", "")
 
@@ -24,6 +28,41 @@ class InstallResult:
 class Installer:
     def __init__(self, storage: Storage):
         self.storage = storage
+
+    def _make_session(self) -> requests.Session:
+        s = requests.Session()
+        retries = Retry(
+            total=3,
+            backoff_factor=0.3,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET"],
+        )
+        adapter = HTTPAdapter(
+            max_retries=retries,
+            pool_connections=32,
+            pool_maxsize=32,
+        )
+        s.mount("http://", adapter)
+        s.mount("https://", adapter)
+        return s
+
+    def _download_one_chunk(self, session: requests.Session, url: str, out_path: str) -> None:
+        # 이미 있으면 스킵(캐시)
+        if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+            return
+
+        tmp_path = out_path + ".part"
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
+        with session.get(url, stream=True, verify=False, timeout=(5, 120)) as r:
+            r.raise_for_status()
+            with open(tmp_path, "wb") as f:
+                # 8KB는 너무 작아서 오버헤드 큼 → 1MB로 키우는 게 체감 큼
+                for chunk in r.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        f.write(chunk)
+
+        os.replace(tmp_path, out_path)
 
     def build_image_manifest_url(self, base_url, ecu, image_name):
         filename = f"{image_name}.json"
@@ -84,22 +123,34 @@ class Installer:
             with measure("Download Chunks", system_name=SYSTEM, test_case=TC):
                 chunk_list = t["images"]["required_chunks"]
 
+                seen = set()
+                uniq = []
                 for c in chunk_list:
-                    url = self.build_image_chunk_url(base_url, c)
-                    out_path = f"./downloads/chunk_storage/{c}"
-                    print(f"[Primary ECU] GET:  {url}")
+                    if c not in seen:
+                        seen.add(c)
+                        uniq.append(c)
+                chunk_list = uniq
 
-                    try:
-                        with requests.get(url, stream=True, verify=False) as response:
-                            response.raise_for_status()
-                            with open(out_path, "wb") as f:
-                                for chunk in response.iter_content(chunk_size=8192):
-                                    if chunk:
-                                        f.write(chunk)
-                        print(f"[OK] saved chunk -> {out_path}")
-                    
-                    except Exception as e:
-                        print(f"[FAIL] failed to download chunk {c} from {url}: {e}")
+                session = self._make_session()
+
+                max_workers = int(os.environ.get("CHUNKS_DL_WORKERS", "8"))
+
+                futures = []
+                with ThreadPoolExecutor(max_workers=max_workers) as ex:
+                    for c in chunk_list:
+                        url = self.build_image_chunk_url(base_url, c)
+                        out_path = f"./downloads/chunk_storage/{c}"
+                        futures.append(ex.submit(self._download_one_chunk, session, url, out_path))
+
+                    # 에러를 여기서 모아서 한번에 터뜨리기
+                    for i, fut in enumerate(as_completed(futures), 1):
+                        exc = fut.exception()
+                        if exc is not None:
+                            raise RuntimeError(f"chunk download failed: {exc}") from exc
+
+                        # 진행률 로그(원하시면)
+                        if i % 50 == 0 or i == len(futures):
+                            print(f"[Primary ECU] downloaded {i}/{len(futures)} chunks (workers={max_workers})")
 
             # 재조립
             with measure("Reassemble chunks", system_name=SYSTEM, test_case=TC):
