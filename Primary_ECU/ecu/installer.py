@@ -341,9 +341,10 @@ class Installer:
             # self.run_static_verification(str(Path(archive_path).resolve()))
 
             # Dynamic Verification (정적 통과 후에만 실행)
+            print("[Primary ECU] Run Dynamic Verification")
             with measure("Dynamic Verification", system_name=SYSTEM, test_case=TC):
                 test_img = f"localhost/{image_name}:under-test"
-                tar_name = f"{image_name}-{int(time.time())}.tar"  # 충돌 방지용(호스트에 저장되는 tar 파일명)
+                tar_name = f"{image_name}.tar"  # 충돌 방지용(호스트에 저장되는 tar 파일명)
                 self.run_dynamic_verification(
                     str(Path(archive_path).resolve()),
                     test_img=test_img,
