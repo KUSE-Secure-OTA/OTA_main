@@ -11,6 +11,7 @@ from utils.fastcdc_chunking import load_image_from_tar
 from utils.fastcdc_chunking import run_container
 from make_vvm import load_or_create_ed25519_private_key, calc_ed25519_keyid_from_public_key, sign_block_ed25519
 from utils.metrics import measure
+from utils.metrics_static import measure_static
 from .storage import Storage
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -94,12 +95,13 @@ class Installer:
         print(f"[Primary ECU] Static Verification Start  ->  {archive_path}")
         print(f"[Primary ECU] Static Out Dir            ->  {out_dir}")
 
-        result = subprocess.run(
-            ["bash", runall, archive_path, str(out_dir)],
-            env=env,
-            capture_output=True,
-            text=True
-        )
+        with measure_static("Static Verification", system_name=SYSTEM, test_case=TC):
+            result = subprocess.run(
+                ["bash", runall, archive_path, str(out_dir)],
+                env=env,
+                capture_output=True,
+                text=True
+            )
 
         if result.stdout.strip():
             print(result.stdout)
