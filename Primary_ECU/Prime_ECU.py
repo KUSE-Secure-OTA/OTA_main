@@ -159,8 +159,19 @@ class PrimeEcuHandler:
                 layer_list = self.installer.download_manifest(update_images, base_url)
                 if len(layer_list) != 0 :
                     print("[Primary ECU] Manifest check is OK.\n")
-                    vvm_version = self.installer.download_chunk(update_images, base_url)
+                    try:
+                        vvm_version = self.installer.download_chunk(update_images, base_url)
+                    except RuntimeError as e:
+                        # 정적 검증 FAIL
+                        print(f"[Primary ECU] Static verification blocked update: {e}")
+                        os._exit(1)
+                        
+                    except Exception as e:
+                        # 예상 못한 오류 
+                        print(f"[Primary ECU] Unexpected error during download/static verification: {e}")
+                        return
 
+                    # PASS / PASS(WARN)
                     self.installer.update_info(layer_list, vvm_version)
                     print("[Primary ECU] Success to update documents.\n")
 
@@ -170,8 +181,7 @@ class PrimeEcuHandler:
                     major -= 1
                     version = f"{major}.{minor}.{patch}"
                     run_container(version)
-                    # Static Verification
-
+                    
                 else:
                     print("[FAIL] This image is not new one.\n")
 
