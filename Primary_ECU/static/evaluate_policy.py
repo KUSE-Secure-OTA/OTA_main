@@ -22,8 +22,10 @@ FORBIDDEN_COMPONENTS = {
 # FAIL: AGPL only
 # WARN: GPL/LGPL
 FAIL_LICENSES = {
-    "AGPL-3.0-only",
-    "AGPL-3.0-or-later",
+    # Normalize to uppercase tokens (see _tokenize_license_field)
+    "AGPL-3.0",
+    "AGPL-3.0-ONLY",
+    "AGPL-3.0-OR-LATER",
     "AGPL-3.0+",
 }
 
@@ -78,6 +80,7 @@ def _load_json(p: Path) -> Dict[str, Any]:
     except Exception:
         return {}
 
+
 def _tokenize_license_field(x: Any) -> List[str]:
     if not x:
         return []
@@ -85,7 +88,9 @@ def _tokenize_license_field(x: Any) -> List[str]:
     raw = raw.strip()
     if not raw:
         return []
-    return [t.strip() for t in _SPLIT_RE.split(raw) if t and t.strip()]
+    # Normalize: uppercase tokens for robust matching across Trivy versions/formats
+    return [t.strip().upper() for t in _SPLIT_RE.split(raw) if t and t.strip()]
+
 
 def normalize_path(p: str) -> str:
     p = (p or "").replace("\\", "/").strip()
@@ -95,6 +100,7 @@ def normalize_path(p: str) -> str:
     if not p.startswith("/"):
         p = "/" + p
     return p
+
 
 def is_sensitive_path(path: str) -> bool:
     np = normalize_path(path)
@@ -109,6 +115,7 @@ def sbom_component_names(sbom: Dict[str, Any]) -> Set[str]:
         if name:
             names.add(name)
     return names
+
 
 def find_forbidden_components(sbom: Dict[str, Any]) -> List[str]:
     names = sbom_component_names(sbom)
@@ -131,7 +138,18 @@ def vuln_counts(cve: Dict[str, Any]) -> Dict[str, int]:
 def secret_findings(fs: Dict[str, Any]) -> List[Tuple[str, str]]:
     hits: List[Tuple[str, str]] = []
     for r in (fs.get("Results") or []):
-        for s in (r.get("Secrets") or []):
+        secrets = r.get("Secrets") or []
+        if not isinstance(secrets, list):
+            continue
+
+        # Some Trivy outputs place file target at result-level
+        r_target = str(r.get("Target") or "").strip()
+
+        for s in secrets:
+            # Trivy can include null entries in Secrets; skip non-dict safely
+            if not isinstance(s, dict):
+                continue
+
             sev = str(s.get("Severity") or "").upper()
             conf = str(s.get("Confidence") or "").upper()
 
@@ -140,7 +158,20 @@ def secret_findings(fs: Dict[str, Any]) -> List[Tuple[str, str]]:
                 continue
 
             loc = s.get("Location") or {}
-            path = str(loc.get("Path") or loc.get("File") or s.get("Target") or "").strip()
+            if not isinstance(loc, dict):
+                loc = {}
+
+            # Expand path candidates for Trivy version differences
+            path = str(
+                loc.get("Path")
+                or loc.get("File")
+                or loc.get("FilePath")
+                or s.get("Target")
+                or s.get("FilePath")
+                or r_target
+                or ""
+            ).strip()
+
             if path:
                 hits.append((path, sev or conf or "HIGH"))
     return hits
@@ -154,6 +185,7 @@ def _tar_has(tf: tarfile.TarFile, name: str) -> bool:
     except KeyError:
         return False
 
+
 def _read_json_member(tf: tarfile.TarFile, member_name: str) -> Dict[str, Any]:
     m = tf.getmember(member_name)
     f = tf.extractfile(m)
@@ -161,12 +193,14 @@ def _read_json_member(tf: tarfile.TarFile, member_name: str) -> Dict[str, Any]:
         return {}
     return json.loads(f.read().decode("utf-8"))
 
+
 def _join_list(v: Any) -> str:
     if isinstance(v, list):
         return " ".join(map(str, v))
     if isinstance(v, str):
         return v
     return ""
+
 
 def extract_image_config_text(archive_path: str) -> str:
     parts: List[str] = []
