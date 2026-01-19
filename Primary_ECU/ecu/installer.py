@@ -38,7 +38,7 @@ class Installer:
         # -----------------
         # 환경에 맞게 변경
         # -----------------
-        host_io_dir: str = "/home/kuse/ota/dynamic_testing/agent-io",
+        host_io_dir: str = "/home/kuse/ota/OTA_main/dynamic_testing/agent-io",
     ):
         self.storage = storage
         self.namespace = namespace
@@ -83,6 +83,9 @@ class Installer:
         os.replace(tmp_path, out_path)
     # -------------------------------------------------------------------
 
+    # -------------------------------------------------------------------
+    # ------------------- FOR DYNAMIC VERIFICATION ----------------------
+    # -------------------------------------------------------------------
     def _run(self, cmd: List[str]) -> subprocess.CompletedProcess:
         return subprocess.run(cmd, check=True, capture_output=True, text=True)
 
@@ -112,6 +115,7 @@ class Installer:
         payload = f"wake {test_img}\n".encode()
         with socket.create_connection((self.spawner_host, self.spawner_nodeport), timeout=5) as s:
             s.sendall(payload)
+    # -------------------------------------------------------------------
 
     def build_image_manifest_url(self, base_url, ecu, image_name):
         filename = f"{image_name}.json"
@@ -136,26 +140,38 @@ class Installer:
 
     # Static verification pipeline 실행
     def run_static_verification(self, archive_path: str):
-        
         env = os.environ.copy()
-        env["ARCHIVE"] = archive_path   # shell pipeline에서 사용할 환경 변수
+        env["ARCHIVE"] = archive_path
 
-        # static/run_all.sh 경로 자동 설정
         static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
         runall = os.path.join(static_dir, "run_all.sh")
 
-        print(f"[Primary ECU] Static Verification Start  ->  {archive_path}")
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_dir = Path("./downloads/static_out") / f"{Path(archive_path).stem}_{ts}"
+        out_dir.mkdir(parents=True, exist_ok=True)
         
-        result = subprocess.run(
-            ["bash", runall, archive_path],
-            env=env,
-            capture_output=True,
-            text=True
-        )
+        print(f"[Primary ECU] Static Verification Start  ->  {archive_path}")
+        print(f"[Primary ECU] Static Out Dir            ->  {out_dir}")
+
+        with measure_static("Static Verification", system_name=SYSTEM, test_case=TC):
+            result = subprocess.run(
+                ["bash", runall, archive_path, str(out_dir)],
+                env=env,
+                capture_output=True,
+                text=True
+            )
+
+        if result.stdout.strip():
+            print(result.stdout)
+        
+        if result.stderr.strip():
+            print(result.stderr)
+
+        policy_log = out_dir / "policy.log"
+        if policy_log.exists():
+            print(policy_log.read_text(encoding="utf-8"))
 
         if result.returncode != 0:
-            print(result.stdout)
-            print(result.stderr)
             raise RuntimeError("Static verification FAILED for: " + archive_path)
 
         print("[Primary ECU] Static Verification PASSED")
@@ -286,23 +302,6 @@ class Installer:
                             print(f"[Primary ECU] downloaded {i}/{len(futures)} chunks (workers={max_workers})")
                 # -------------------------------------------------------------------
 
-                # for c in chunk_list:
-                #     url = self.build_image_chunk_url(base_url, c)
-                #     out_path = f"./downloads/chunk_storage/{c}"
-                #     print(f"[Primary ECU] GET:  {url}")
-
-                #     try:
-                #         with requests.get(url, stream=True, verify=False) as response:
-                #             response.raise_for_status()
-                #             with open(out_path, "wb") as f:
-                #                 for chunk in response.iter_content(chunk_size=8192):
-                #                     if chunk:
-                #                         f.write(chunk)
-                #         print(f"[OK] saved chunk -> {out_path}")
-                    
-                #     except Exception as e:
-                #         print(f"[FAIL] failed to download chunk {c} from {url}: {e}")
-
             # 재조립
             with measure("Reassemble chunks", system_name=SYSTEM, test_case=TC):
                 image_name = t["images"]["image_name"]
@@ -338,7 +337,7 @@ class Installer:
                     break
 
             # Static Verification
-            # self.run_static_verification(str(Path(archive_path).resolve()))
+            self.run_static_verification(str(Path(archive_path).resolve()))
 
             # Dynamic Verification (정적 통과 후에만 실행)
             print("[Primary ECU] Run Dynamic Verification")
@@ -352,10 +351,11 @@ class Installer:
                     timeout_sec=2400,
                     # fail_on_warn=False,  # 필요하면 True로
                 )
-
-            # 동적 실행
-            # subprocess.run(["podman", "load", "-i", archive_path], check=True)
-            # run_container()
+            
+            # Update VVM After Verification
+            with open("vvm.json", "w", encoding="utf-8") as f:
+                json.dump(vvm, f, indent=2)
+            printf("[Primary ECU] Update VVM information")
 
         return updated_ecu_versions
 
