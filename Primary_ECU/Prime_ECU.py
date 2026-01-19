@@ -160,7 +160,14 @@ class PrimeEcuHandler:
                 layer_list = self.installer.download_manifest(update_images, base_url)
                 if len(layer_list) != 0 :
                     print("[Primary ECU] Manifest check is OK.\n")
-                    vvm_version = self.installer.download_chunk(update_images, base_url)
+                    try:
+                        vvm_version = self.installer.download_chunk(update_images, base_url)
+                    except RuntimeError:
+                        # Verification FAIL -> Stop Update
+                        return
+                    except Exception:
+                        # Unexpected Error -> Stop Update
+                        return
 
                     # self.installer.update_info(layer_list, vvm_version)
                     # print("[Primary ECU] Success to update documents.\n")
