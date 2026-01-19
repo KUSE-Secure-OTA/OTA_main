@@ -12,6 +12,7 @@ from utils.fastcdc_chunking import load_image_from_tar
 from utils.fastcdc_chunking import run_container
 from make_vvm import load_or_create_ed25519_private_key, calc_ed25519_keyid_from_public_key, sign_block_ed25519
 from utils.metrics import measure
+from utils.metrics_static import measure_static
 from .storage import Storage
 
 # -------------------------------------------------------------------
