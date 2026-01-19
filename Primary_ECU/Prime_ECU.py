@@ -164,9 +164,13 @@ class PrimeEcuHandler:
                         vvm_version = self.installer.download_chunk(update_images, base_url)
                     except RuntimeError:
                         # Verification FAIL -> Stop Update
+                        self.client.loop_stop()
+                        self.client.disconnect()
                         return
                     except Exception:
                         # Unexpected Error -> Stop Update
+                        self.client.loop_stop()
+                        self.client.disconnect()
                         return
 
                     # self.installer.update_info(layer_list, vvm_version)
