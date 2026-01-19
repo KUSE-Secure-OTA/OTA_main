@@ -355,7 +355,7 @@ class Installer:
             # Update VVM After Verification
             with open("vvm.json", "w", encoding="utf-8") as f:
                 json.dump(vvm, f, indent=2)
-            printf("[Primary ECU] Update VVM information")
+            print("[Primary ECU] Update VVM information")
 
         return updated_ecu_versions
 
